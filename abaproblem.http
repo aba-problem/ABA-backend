@@ -1,0 +1,6 @@
+@abaproblem_HostAddress = http://localhost:5273
+
+GET {{abaproblem_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
