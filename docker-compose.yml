@@ -1,0 +1,74 @@
+version: "3.9"
+
+# ============================================================================
+# Módulo 6 — Distribución de RAM para un VPS de 4GB total:
+#   sqlserver  2 - 2.5 GB  (mem_limit + sp_configure 'max server memory', sql/06_memory_budget.sql)
+#   backend    300 - 400 MB
+#   nginx      50 - 100 MB
+#   resto: SO + Docker overhead
+# Módulo 5.3 — "backend" y "sqlserver" NO publican puertos al host: solo "nginx"
+# es alcanzable desde fuera. Angular/el navegador solo conocen el dominio público.
+# ============================================================================
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: abaproblem-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: ${SA_PASSWORD}
+      MSSQL_PID: Express
+    mem_limit: 2560m
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      abaproblem_net:
+        ipv4_address: 172.28.0.10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: abaproblem-backend
+    env_file:
+      - .env
+    environment:
+      # El backend NUNCA construye la connection string desde secretos sueltos: la arma
+      # completa .env (DB_CONNECTION_STRING) para no repetir la password en dos lugares.
+      ASPNETCORE_ENVIRONMENT: Production
+    mem_limit: 400m
+    depends_on:
+      - sqlserver
+    networks:
+      abaproblem_net:
+        ipv4_address: 172.28.0.20
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: abaproblem-nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+      # - "443:443"   # habilitar junto con el server block TLS comentado en nginx.conf
+    mem_limit: 100m
+    depends_on:
+      - backend
+    networks:
+      abaproblem_net:
+        ipv4_address: 172.28.0.30
+    restart: unless-stopped
+
+networks:
+  # Subnet fija: debe coincidir con ReverseProxy:TrustedNetwork (Program.cs) para que
+  # el backend confíe en el X-Forwarded-For que reenvía ESTE nginx, y en ningún otro origen.
+  abaproblem_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  sqlserver_data:

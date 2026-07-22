@@ -1,0 +1,12 @@
+bin/
+obj/
+.vs/
+.idea/
+.git/
+.gitignore
+*.user
+.env
+appsettings.Development.json
+README.md
+sql/
+infra/

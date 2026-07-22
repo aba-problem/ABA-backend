@@ -1,0 +1,37 @@
+name: CI
+
+# Módulo 7.1/7.2 — Este workflow es el "status check" que la protección de rama
+# de main debe exigir antes de permitir un merge (ver README.md § Módulo 7).
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  secret-scan:
+    name: Escaneo de secretos (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks necesita historial completo, no solo el último commit
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    name: Build .NET
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - name: Restore
+        run: dotnet restore abaproblem.csproj
+      - name: Build
+        run: dotnet build abaproblem.csproj --no-restore -c Release

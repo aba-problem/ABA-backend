@@ -1,0 +1,72 @@
+#!/bin/sh
+# ============================================================================
+# Módulo 7.2 — Pre-commit hook: bloquea el commit si detecta secretos.
+#
+# Instalación (una vez por clon del repo):
+#   git config core.hooksPath hooks
+#
+# Si tienes gitleaks instalado (https://github.com/gitleaks/gitleaks), se usa
+# como escáner principal (más preciso). Si no, cae a un escaneo de respaldo por
+# patrones (API keys, private keys, connection strings con password, JWT keys).
+# ============================================================================
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -z "$STAGED" ]; then
+    exit 0
+fi
+
+# 1) Nunca permitir que .env (ni variantes por entorno) se cuelen en un commit,
+#    sin importar si alguien forzó "git add -f".
+BLOQUEADOS=$(echo "$STAGED" | grep -E '(^|/)\.env(\..+)?$' | grep -vE '\.example$')
+if [ -n "$BLOQUEADOS" ]; then
+    echo "ERROR (Módulo 7.2): intentas commitear un archivo .env real. Commit bloqueado."
+    echo "Archivo(s): $BLOQUEADOS"
+    exit 1
+fi
+
+# 2) Si gitleaks está disponible, es el escáner autoritativo.
+if command -v gitleaks >/dev/null 2>&1; then
+    gitleaks protect --staged --redact --verbose
+    exit $?
+fi
+
+echo "gitleaks no encontrado; usando escaneo de respaldo por patrones."
+echo "(Instala gitleaks para una detección más completa: https://github.com/gitleaks/gitleaks)"
+
+# 3) Fallback sin dependencias externas — POSIX puro (sin PCRE) para portabilidad.
+SECRET_PATTERN='AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PGP) PRIVATE KEY-----|Password=[^;'\''\" ]{4,}|(secret|apikey|api_key|client_secret)[[:space:]]*[:=][[:space:]]*[A-Za-z0-9_-]{16,}'
+# Placeholders conocidos que NO deben disparar el bloqueo (evita falsos positivos
+# en appsettings.json / .env.example, que intencionalmente llevan valores vacíos
+# o marcadores como CHANGE_ME).
+ALLOWLIST_PATTERN='CHANGE_ME|REPLACE_ME|YOUR_|PLACEHOLDER|EXAMPLE|xxxxx'
+
+FOUND_FILE=$(mktemp)
+
+for FILE in $STAGED; do
+    [ -f "$FILE" ] || continue
+
+    ADDED_LINES=$(git diff --cached -- "$FILE" | grep -E '^\+' | grep -vE '^\+\+\+')
+    [ -z "$ADDED_LINES" ] && continue
+
+    echo "$ADDED_LINES" | while IFS= read -r line; do
+        if echo "$line" | grep -qiE "$ALLOWLIST_PATTERN"; then
+            continue
+        fi
+        if echo "$line" | grep -qiE "$SECRET_PATTERN"; then
+            echo "Posible secreto en: $FILE"
+            echo "  > $line"
+            echo "1" >> "$FOUND_FILE"
+        fi
+    done
+done
+
+if [ -s "$FOUND_FILE" ]; then
+    rm -f "$FOUND_FILE"
+    echo "Commit bloqueado (Módulo 7.2). Revisa los archivos señalados arriba."
+    echo "Si es un falso positivo, ajusta hooks/pre-commit o usa 'git commit --no-verify' bajo tu propio criterio."
+    exit 1
+fi
+
+rm -f "$FOUND_FILE"
+exit 0

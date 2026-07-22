@@ -40,6 +40,10 @@ ScaffoldingReadMe.txt
 # dotenv environment variables file
 .env
 
+# Módulo 7.3 — configuraciones con posibles secretos por entorno, nunca en el repo
+appsettings.Development.json
+appsettings.Production.json
+
 # Others
 ~$*
 *~

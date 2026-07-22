@@ -1,0 +1,13 @@
+# ============================================================================
+# Módulo 7.4 — Ningún archivo que afecte recursos de la VPS compartida se
+# fusiona sin revisión: requiere aprobación del dueño listado, no push directo.
+# Reemplaza @Cabra0711 por el equipo/usuario real cuando haya más de un mantenedor.
+# ============================================================================
+
+/Program.cs                   @Cabra0711
+/Services/RateLimitPolicies.cs @Cabra0711
+/docker-compose.yml           @Cabra0711
+/Dockerfile                   @Cabra0711
+/nginx.conf                   @Cabra0711
+/infra/                       @Cabra0711
+/sql/06_memory_budget.sql     @Cabra0711
