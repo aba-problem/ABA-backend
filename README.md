@@ -148,4 +148,3 @@ Ya incluye `bin/`, `obj/`, `.idea/`, `.vs/`, `*.user`, `.env`, `appsettings.Deve
 
 ### 7.4 — Cambios a parámetros de recursos de la VPS
 `Program.cs`, `docker-compose.yml`, `nginx.conf`, `infra/` y `sql/06_memory_budget.sql` están cubiertos por [.github/CODEOWNERS](.github/CODEOWNERS): cualquier cambio pasa por PR con revisión, nunca por push directo a `main`.
-vamos a ver si pasa ya
