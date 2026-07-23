@@ -28,6 +28,7 @@ public sealed class AuthController : ControllerBase
     private readonly IMySqlWhitelistSyncService _mysqlWhitelistSync;
     private readonly ICookieJwtService _jwt;
     private readonly ILoginAttemptTracker _tracker;
+    private readonly ICaptchaService _captcha;
     private readonly IAntiforgery _antiforgery;
     private readonly ILogger<AuthController> _logger;
     private readonly string _frontendBaseUrl;
@@ -39,6 +40,7 @@ public sealed class AuthController : ControllerBase
         IMySqlWhitelistSyncService mysqlWhitelistSync,
         ICookieJwtService jwt,
         ILoginAttemptTracker tracker,
+        ICaptchaService captcha,
         IAntiforgery antiforgery,
         IConfiguration config,
         ILogger<AuthController> logger)
@@ -49,6 +51,7 @@ public sealed class AuthController : ControllerBase
         _mysqlWhitelistSync = mysqlWhitelistSync;
         _jwt = jwt;
         _tracker = tracker;
+        _captcha = captcha;
         _antiforgery = antiforgery;
         _logger = logger;
         _frontendBaseUrl = (config["Frontend:BaseUrl"] ?? "https://aba.andrescortes.dev").TrimEnd('/');
@@ -57,18 +60,37 @@ public sealed class AuthController : ControllerBase
     // ─────────────────────────────────────────────────────────────────────────
     //  LOGIN (challenge) — inicia el flujo OAuth. El framework genera y valida el
     //  parámetro `state` (cookie de correlación) → control 1.3 CSRF del redirect.
+    //  Control 1.3 (cierre de auditoría) — segunda línea de defensa: si esa IP ya
+    //  acumuló >= 3 fallos, exige captcha ANTES de gastar el flujo OAuth completo.
+    //  El bloqueo total por tiempo también se chequea aquí (no solo en el callback),
+    //  para no ni siquiera redirigir a Google/GitHub si la IP ya está bloqueada.
     // ─────────────────────────────────────────────────────────────────────────
 
     [HttpGet("google/login")]
-    public IActionResult GoogleLogin()
-        => RetarProveedor(AuthSchemes.Google, "google");
+    public Task<IActionResult> GoogleLogin([FromQuery] string? captchaToken, CancellationToken ct)
+        => RetarProveedorAsync(AuthSchemes.Google, "google", captchaToken, ct);
 
     [HttpGet("github/login")]
-    public IActionResult GitHubLogin()
-        => RetarProveedor(AuthSchemes.GitHub, "github");
+    public Task<IActionResult> GitHubLogin([FromQuery] string? captchaToken, CancellationToken ct)
+        => RetarProveedorAsync(AuthSchemes.GitHub, "github", captchaToken, ct);
 
-    private IActionResult RetarProveedor(string scheme, string proveedor)
+    private async Task<IActionResult> RetarProveedorAsync(string scheme, string proveedor, string? captchaToken, CancellationToken ct)
     {
+        var ip = IpCliente();
+
+        if (_tracker.EstaBloqueada(ip, out var retryAfter))
+        {
+            Response.Headers["Retry-After"] = retryAfter.ToString();
+            return StatusCode(StatusCodes.Status429TooManyRequests, new { error = ErrorGenerico });
+        }
+
+        if (_tracker.RequiereCaptcha(ip))
+        {
+            var captchaValido = await _captcha.ValidarAsync(captchaToken ?? string.Empty, ip, ct);
+            if (!captchaValido)
+                return BadRequest(new { error = "CAPTCHA_REQUERIDO", mensaje = "Verificación adicional requerida." });
+        }
+
         var props = new AuthenticationProperties
         {
             // Tras validar el code/state, el handler redirige a nuestro callback.

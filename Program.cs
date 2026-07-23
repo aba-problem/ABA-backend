@@ -78,6 +78,8 @@ MapEnv("Authentication:GitHub:ClientSecret", "GITHUB_CLIENT_SECRET");
 MapEnv("Frontend:BaseUrl", "FRONTEND_BASE_URL");
 MapEnv("ReverseProxy:TrustedNetwork", "REVERSE_PROXY_TRUSTED_NETWORK");
 MapEnv("MySql:AdminConnectionString", "MYSQL_ADMIN_CONNECTION_STRING");
+MapEnv("Captcha:TurnstileSiteKey", "TURNSTILE_SITE_KEY");
+MapEnv("Captcha:TurnstileSecretKey", "TURNSTILE_SECRET_KEY");
 builder.Configuration.AddInMemoryCollection(mapaEnv);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -169,7 +171,7 @@ builder.Services.AddAuthentication(options =>
         options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? "";
         options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "";
         options.SignInScheme = AuthSchemes.External;
-        options.CallbackPath = "/signin-google";             // interno del handler; distinto del callback del controller
+        options.CallbackPath = "/auth/google/callback";             // interno del handler; distinto del callback del controller
         options.UsePkce = true;
         options.SaveTokens = false;
         options.ClaimActions.MapJsonKey("email_verified", "email_verified");
@@ -181,7 +183,7 @@ builder.Services.AddAuthentication(options =>
         options.ClientId = builder.Configuration["Authentication:GitHub:ClientId"] ?? "";
         options.ClientSecret = builder.Configuration["Authentication:GitHub:ClientSecret"] ?? "";
         options.SignInScheme = AuthSchemes.External;
-        options.CallbackPath = "/signin-github";
+        options.CallbackPath = "/auth/github/callback";
         options.UsePkce = true;
         options.SaveTokens = false;
         options.Scope.Add("user:email");
@@ -249,6 +251,13 @@ builder.Services.AddHostedService<MySqlQuotaEnforcementService>();
 // GeoIP (control geográfico América/Latam, sql/003 + sql/004/005) — HttpClient con
 // timeout corto: nunca debe demorar el login si el proveedor externo está lento/caído.
 builder.Services.AddHttpClient<IGeoIpService, GeoIpService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
+// Captcha (control 1.3, segunda línea de defensa) — mismo patrón que GeoIpService:
+// timeout corto, nunca debe demorar el login si Cloudflare está lento/caído.
+builder.Services.AddHttpClient<ICaptchaService, TurnstileCaptchaService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(5);
 });
