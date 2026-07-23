@@ -171,7 +171,10 @@ builder.Services.AddAuthentication(options =>
         options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? "";
         options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "";
         options.SignInScheme = AuthSchemes.External;
-        options.CallbackPath = "/auth/google/callback";             // interno del handler; distinto del callback del controller
+        // Debe coincidir EXACTO con el redirect URI registrado en Google Cloud Console.
+        // El controller usa una ruta distinta (/auth/google/procesar) para el post-procesamiento
+        // — ver comentario en AuthController.RetarProveedorAsync sobre por qué no pueden coincidir.
+        options.CallbackPath = "/auth/google/callback";
         options.UsePkce = true;
         options.SaveTokens = false;
         options.ClaimActions.MapJsonKey("email_verified", "email_verified");
@@ -183,6 +186,7 @@ builder.Services.AddAuthentication(options =>
         options.ClientId = builder.Configuration["Authentication:GitHub:ClientId"] ?? "";
         options.ClientSecret = builder.Configuration["Authentication:GitHub:ClientSecret"] ?? "";
         options.SignInScheme = AuthSchemes.External;
+        // Debe coincidir EXACTO con la Authorization callback URL registrada en GitHub.
         options.CallbackPath = "/auth/github/callback";
         options.UsePkce = true;
         options.SaveTokens = false;

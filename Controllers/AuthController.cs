@@ -93,7 +93,11 @@ public sealed class AuthController : ControllerBase
 
         var props = new AuthenticationProperties
         {
-            // Tras validar el code/state, el handler redirige a nuestro callback.
+            // Tras validar el code/state, el handler de OAuth (CallbackPath en Program.cs,
+            // igual a /auth/{proveedor}/callback — lo que está registrado en Google/GitHub)
+            // redirige aquí para el post-procesamiento. Esta ruta DEBE ser distinta de
+            // CallbackPath: si coincidieran, el handler interceptaría también este redirect
+            // (sin code/state en la URL) y tronaría con "oauth state was missing or invalid".
             RedirectUri = Url.Action(nameof(Callback), "Auth", new { proveedor })!,
             AllowRefresh = false,
         };
@@ -101,11 +105,18 @@ public sealed class AuthController : ControllerBase
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    //  CALLBACK — punto de mayor riesgo: rate limit dedicado + anti-fuerza-bruta.
+    //  POST-PROCESAMIENTO — punto de mayor riesgo: rate limit dedicado + anti-fuerza-bruta.
     //  Control 1.3: 5 intentos/IP/5min (rate limiter "auth") + bloqueo temporal 15/1h.
+    //
+    //  IMPORTANTE: esta ruta ("procesar") es distinta de CallbackPath en Program.cs
+    //  ("/auth/{proveedor}/callback", que es lo registrado en Google/GitHub). El handler
+    //  de OAuth intercepta CallbackPath, valida code+state, y redirige aquí. Si esta ruta
+    //  fuera la MISMA que CallbackPath, el handler interceptaría también este redirect
+    //  (sin code/state) y fallaría con "oauth state was missing or invalid" — no cambiar
+    //  esto sin también separar CallbackPath en Program.cs.
     // ─────────────────────────────────────────────────────────────────────────
 
-    [HttpGet("{proveedor:regex(^(google|github)$)}/callback")]
+    [HttpGet("{proveedor:regex(^(google|github)$)}/procesar")]
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> Callback(string proveedor, CancellationToken ct)
     {
