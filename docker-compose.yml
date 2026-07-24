@@ -16,6 +16,12 @@ services:
         ipv4_address: 172.28.0.10
     restart: unless-stopped
 
+  keys-init:
+    image: busybox
+    command: sh -c "mkdir -p /keys && chown -R 1654:1654 /keys"
+    volumes:
+      - dataprotection_keys:/keys
+
   backend:
     build:
       context: .
@@ -30,6 +36,7 @@ services:
       - dataprotection_keys:/keys
     depends_on:
       - sqlserver
+      - keys-init
     networks:
       abaproblem_net:
         ipv4_address: 172.28.0.20
