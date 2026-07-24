@@ -104,17 +104,12 @@ builder.Services.AddMemoryCache(options => options.SizeLimit = 2000);
 // ─────────────────────────────────────────────────────────────────────────────
 //  Antiforgery (control 1.2 — CSRF Double Submit): Angular lee la cookie XSRF-TOKEN
 //  y reenvía el valor en el header X-CSRF-TOKEN en cada petición mutante.
-//  SameSite=None es OBLIGATORIO: frontend (aba.andrescortes.dev) y API
-//  (api.aba.andrescortes.dev) son subdominios distintos — con Strict/Lax, el
-//  navegador descarta la cookie en requests cross-origin aunque se use
-//  credentials:'include'.
+//  SameSite=None + Domain explícito: la cookie XSRF-TOKEN (HttpOnly=false) DEBE ser
+//  legible por document.cookie en aba.andrescortes.dev. Sin Domain, el browser la
+//  scopea al host exacto que la setea (api.aba.andrescortes.dev) y JavaScript en el
+//  frontend no puede leerla → readXsrfToken() devuelve null → header nunca se envía.
 // ─────────────────────────────────────────────────────────────────────────────
-// Extraer host del frontend para el Domain de las cookies CSRF.
-// La cookie XSRF-TOKEN (HttpOnly=false) DEBE ser legible por document.cookie en el
-// dominio del frontend (aba.andrescortes.dev). Sin Domain explícito, el browser la
-// scoped al host exacto que la setea (api.aba.andrescortes.dev) y JavaScript en el
-// frontend no puede leerla → readXsrfToken() siempre devuelve null → header nunca
-// se envía → CSRF_INVALIDO en cada POST.
+var frontendOrigin = builder.Configuration["Frontend:BaseUrl"] ?? "https://aba.andrescortes.dev";
 var frontendHost = new Uri(frontendOrigin).Host;  // "aba.andrescortes.dev"
 builder.Services.AddAntiforgery(options =>
 {
@@ -235,7 +230,6 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 //  CORS (anticipo del control 5.5): necesario para que el SPA envíe cookies HttpOnly.
 //  Restrictivo: solo el origen exacto del frontend, con AllowCredentials.
 // ─────────────────────────────────────────────────────────────────────────────
-var frontendOrigin = builder.Configuration["Frontend:BaseUrl"] ?? "https://aba.andrescortes.dev";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("frontend", policy =>
