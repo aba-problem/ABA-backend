@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Antiforgery;
 
 namespace abaproblem.Middleware;
 
@@ -27,6 +28,29 @@ public sealed class ExceptionHandlingMiddleware
         try
         {
             await _next(context);
+        }
+        catch (AntiforgeryValidationException ex)
+        {
+            // Error de CLIENTE esperable (falta/no coincide X-CSRF-TOKEN) — no es una falla
+            // del servidor. 400, no 500; se loguea como warning (no "excepción no controlada")
+            // para no ensuciar el log de producción con algo que el frontend puede corregir
+            // llamando primero a GET /auth/csrf.
+            var traceId = context.TraceIdentifier;
+            _logger.LogWarning("CSRF inválido/ausente método={Metodo} ruta={Ruta} traceId={TraceId} detalle={Detalle}",
+                context.Request.Method, context.Request.Path, traceId, ex.Message);
+
+            if (context.Response.HasStarted)
+                throw;
+
+            context.Response.Clear();
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new
+            {
+                error = "CSRF_INVALIDO",
+                mensaje = "Token CSRF ausente o inválido. Llama a GET /auth/csrf y reenvía su valor en el header X-CSRF-TOKEN.",
+                traceId,
+            }));
         }
         catch (Exception ex)
         {
