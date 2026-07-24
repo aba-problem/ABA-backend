@@ -39,6 +39,16 @@ ScaffoldingReadMe.txt
 
 # dotenv environment variables file
 .env
+.env.dev
+.env.local
+.env.*.local
+
+# Local development
+docker-compose.dev.yml
+nginx.dev.conf
+sql/init.sql
+sql/init-mysql.sql
+setup-local.sh
 
 # Módulo 7.3 — configuraciones con posibles secretos por entorno, nunca en el repo
 appsettings.Development.json

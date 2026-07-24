@@ -103,6 +103,10 @@ builder.Services.AddMemoryCache(options => options.SizeLimit = 2000);
 // ─────────────────────────────────────────────────────────────────────────────
 //  Antiforgery (control 1.2 — CSRF Double Submit): Angular lee la cookie XSRF-TOKEN
 //  y reenvía el valor en el header X-CSRF-TOKEN en cada petición mutante.
+//  SameSite=None es OBLIGATORIO: frontend (aba.andrescortes.dev) y API
+//  (api.aba.andrescortes.dev) son subdominios distintos — con Strict/Lax, el
+//  navegador descarta la cookie en requests cross-origin aunque se use
+//  credentials:'include'.
 // ─────────────────────────────────────────────────────────────────────────────
 builder.Services.AddAntiforgery(options =>
 {
@@ -110,7 +114,7 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.Name = "__CSRF";
     options.Cookie.HttpOnly = true;                 // la cookie de validación es HttpOnly
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SameSite = SameSiteMode.None;    // cross-origin: subdominios distintos
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
