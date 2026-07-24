@@ -1,15 +1,5 @@
 version: "3.9"
 
-# ============================================================================
-# Módulo 6 — Distribución de RAM para un VPS de 4GB total:
-#   sqlserver  2 - 2.5 GB  (mem_limit + sp_configure 'max server memory', sql/06_memory_budget.sql)
-#   backend    300 - 400 MB
-#   nginx      50 - 100 MB
-#   resto: SO + Docker overhead
-# Módulo 5.3 — "backend" y "sqlserver" NO publican puertos al host: solo "nginx"
-# es alcanzable desde fuera. Angular/el navegador solo conocen el dominio público.
-# ============================================================================
-
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -34,10 +24,10 @@ services:
     env_file:
       - .env
     environment:
-      # El backend NUNCA construye la connection string desde secretos sueltos: la arma
-      # completa .env (DB_CONNECTION_STRING) para no repetir la password en dos lugares.
       ASPNETCORE_ENVIRONMENT: Production
     mem_limit: 400m
+    volumes:
+      - dataprotection_keys:/keys
     depends_on:
       - sqlserver
     networks:
@@ -52,7 +42,6 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "80:80"
-      # - "443:443"   # habilitar junto con el server block TLS comentado en nginx.conf
     mem_limit: 100m
     depends_on:
       - backend
@@ -62,8 +51,6 @@ services:
     restart: unless-stopped
 
 networks:
-  # Subnet fija: debe coincidir con ReverseProxy:TrustedNetwork (Program.cs) para que
-  # el backend confíe en el X-Forwarded-For que reenvía ESTE nginx, y en ningún otro origen.
   abaproblem_net:
     driver: bridge
     ipam:
@@ -72,3 +59,4 @@ networks:
 
 volumes:
   sqlserver_data:
+  dataprotection_keys:

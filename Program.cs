@@ -7,6 +7,7 @@ using abaproblem.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.IdentityModel.Tokens;
@@ -108,10 +109,12 @@ builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-CSRF-TOKEN";
     options.Cookie.Name = "__CSRF";
-    options.Cookie.HttpOnly = true;                 // la cookie de validación es HttpOnly
+    options.Cookie.HttpOnly = true;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
     options.Cookie.SameSite = SameSiteMode.Strict;
 });
+
+builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo("/keys")).SetApplicationName("abaproblem");
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Autenticación: JWT (leído desde cookie HttpOnly) + cookie de correlación externa
