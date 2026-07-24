@@ -43,6 +43,90 @@ END
 GO
 
 /* -------------------------------------------------------------------------
+   sp_ObtenerBaseDatosPorId
+   Dashboard (Módulo 3): retorna UNA sola base por ID, SIN password.
+   Control BOLA: si @BaseDeDatosId no existe o no pertenece a @UsuarioId,
+   se traduce a los mismos errores 50011/50012 que sp_ObtenerCredencialesBaseDatos
+   para que el backend los mapee a 404 (nunca 403 — control 3.1).
+   ------------------------------------------------------------------------- */
+CREATE OR ALTER PROCEDURE dbo.sp_ObtenerBaseDatosPorId
+    @BaseDeDatosId INT,
+    @UsuarioId     INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @UsuarioIdDueno INT;
+
+    SELECT @UsuarioIdDueno = UsuarioId
+    FROM dbo.BaseDeDatos
+    WHERE Id = @BaseDeDatosId;
+
+    IF @UsuarioIdDueno IS NULL
+        THROW 50011, 'La base de datos no existe.', 1;
+
+    IF @UsuarioIdDueno <> @UsuarioId
+    BEGIN
+        INSERT INTO dbo.Auditoria (UsuarioId, Entidad, EntidadId, Accion, Detalle)
+        VALUES (@UsuarioId, 'BaseDeDatos', @BaseDeDatosId, 'ACCESO_DETALLE_RECHAZADO',
+                (SELECT @UsuarioIdDueno AS duenoReal FOR JSON PATH, WITHOUT_ARRAY_WRAPPER));
+
+        THROW 50012, 'No tienes permiso para ver esta base de datos.', 1;
+    END
+
+    SELECT
+        bd.Id, bd.NombreBD, bd.UsuarioBD, bd.Host, bd.Puerto,
+        m.Nombre AS Motor, bd.Estado, bd.FechaCreacion, bd.UltimaActividad,
+        bd.EspacioMaximoMB, bd.EspacioUtilizadoMB
+    FROM dbo.BaseDeDatos bd
+    INNER JOIN dbo.MotorBaseDatos m ON m.Id = bd.MotorId
+    WHERE bd.Id = @BaseDeDatosId;
+END
+GO
+
+/* -------------------------------------------------------------------------
+   sp_DesactivarBaseDatos
+   Soft-delete controlado: cambia Estado a 'ELIMINADA' (el trigger
+   trg_BaseDeDatos_SoftDelete ya existe en 001 y convierte cualquier
+   DELETE en UPDATE + registro de Auditoria). Este SP agrega la capa
+   de BOLA (solo el dueño puede desactivar) y previene desactivar una
+   base que ya está ELIMINADA.
+   ------------------------------------------------------------------------- */
+CREATE OR ALTER PROCEDURE dbo.sp_DesactivarBaseDatos
+    @BaseDeDatosId INT,
+    @UsuarioId     INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @UsuarioIdDueno INT, @Estado VARCHAR(20);
+
+    SELECT @UsuarioIdDueno = UsuarioId, @Estado = Estado
+    FROM dbo.BaseDeDatos
+    WHERE Id = @BaseDeDatosId;
+
+    IF @UsuarioIdDueno IS NULL
+        THROW 50011, 'La base de datos no existe.', 1;
+
+    IF @UsuarioIdDueno <> @UsuarioId
+    BEGIN
+        INSERT INTO dbo.Auditoria (UsuarioId, Entidad, EntidadId, Accion, Detalle)
+        VALUES (@UsuarioId, 'BaseDeDatos', @BaseDeDatosId, 'DESACTIVAR_RECHAZADO',
+                (SELECT @UsuarioIdDueno AS duenoReal FOR JSON PATH, WITHOUT_ARRAY_WRAPPER));
+
+        THROW 50012, 'No tienes permiso para desactivar esta base de datos.', 1;
+    END
+
+    IF @Estado = 'ELIMINADA'
+        RETURN; -- ya estaba desactivada, no-op silencioso
+
+    -- DELETE es interceptado por trg_BaseDeDatos_SoftDelete que convierte
+    -- a UPDATE SET Estado='ELIMINADA' + INSERT en Auditoria (Accion='DESACTIVAR').
+    DELETE FROM dbo.BaseDeDatos WHERE Id = @BaseDeDatosId;
+END
+GO
+
+/* -------------------------------------------------------------------------
    sp_ActualizarEspacioUsado
    El backend mide el uso REAL en el motor (information_schema.tables en
    MySQL) y llama esto para: (1) reflejarlo en ABA_Control, fuente de verdad

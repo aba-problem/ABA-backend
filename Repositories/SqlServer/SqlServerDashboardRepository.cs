@@ -48,6 +48,51 @@ public sealed class SqlServerDashboardRepository : IDashboardRepository
         return resultado;
     }
 
+    public async Task<DashboardItemDto?> ObtenerPorIdAsync(long baseDeDatosId, long usuarioId, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.AbrirAsync(ct);
+        await using var cmd = new SqlCommand("dbo.sp_ObtenerBaseDatosPorId", conn)
+        {
+            CommandType = CommandType.StoredProcedure,
+        };
+        cmd.Parameters.Add("@BaseDeDatosId", SqlDbType.Int).Value = (int)baseDeDatosId;
+        cmd.Parameters.Add("@UsuarioId", SqlDbType.Int).Value = (int)usuarioId;
+
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+                return null;
+
+            return new DashboardItemDto
+            {
+                Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                NombreBD = reader.GetString(reader.GetOrdinal("NombreBD")),
+                UsuarioBD = reader.GetString(reader.GetOrdinal("UsuarioBD")),
+                Host = reader.GetString(reader.GetOrdinal("Host")),
+                Puerto = reader.GetInt32(reader.GetOrdinal("Puerto")),
+                Motor = reader.GetString(reader.GetOrdinal("Motor")),
+                Estado = reader.GetString(reader.GetOrdinal("Estado")),
+                FechaCreacion = reader.GetDateTime(reader.GetOrdinal("FechaCreacion")),
+                UltimaActividad = reader.IsDBNull(reader.GetOrdinal("UltimaActividad"))
+                    ? null
+                    : reader.GetDateTime(reader.GetOrdinal("UltimaActividad")),
+                EspacioMaximoMB = reader.GetInt16(reader.GetOrdinal("EspacioMaximoMB")),
+                EspacioUtilizadoMB = reader.GetDecimal(reader.GetOrdinal("EspacioUtilizadoMB")),
+            };
+        }
+        catch (SqlException ex) when (ex.Number is 50011 or 50012)
+        {
+            // Control 3.1 (BOLA): no existe (50011) o no es el dueño (50012). Se traducen
+            // ambas al mismo resultado (null → 404) para no confirmar existencia a un no-dueño.
+            return null;
+        }
+        catch (SqlException ex) when (ex.Number >= 50000)
+        {
+            throw new SpBusinessException(ex.Number, ex.Message);
+        }
+    }
+
     public async Task<CredencialDto?> ObtenerCredencialesAsync(long baseDeDatosId, long usuarioIdSolicitante, CancellationToken ct = default)
     {
         await using var conn = await _factory.AbrirAsync(ct);
@@ -86,6 +131,33 @@ public sealed class SqlServerDashboardRepository : IDashboardRepository
         {
             // Control 3.1 (BOLA): no existe (50011) o no es el dueño (50012). Se traducen
             // ambas al mismo resultado (null → 404) para no confirmar existencia a un no-dueño.
+            return null;
+        }
+        catch (SqlException ex) when (ex.Number >= 50000)
+        {
+            throw new SpBusinessException(ex.Number, ex.Message);
+        }
+    }
+
+    public async Task<bool?> DesactivarAsync(long baseDeDatosId, long usuarioId, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.AbrirAsync(ct);
+        await using var cmd = new SqlCommand("dbo.sp_DesactivarBaseDatos", conn)
+        {
+            CommandType = CommandType.StoredProcedure,
+        };
+        cmd.Parameters.Add("@BaseDeDatosId", SqlDbType.Int).Value = (int)baseDeDatosId;
+        cmd.Parameters.Add("@UsuarioId", SqlDbType.Int).Value = (int)usuarioId;
+
+        try
+        {
+            var rows = await cmd.ExecuteNonQueryAsync(ct);
+            // rows=0 si ya estaba ELIMINADA (no-op en el SP), rows=1 si se desactivó.
+            return rows > 0;
+        }
+        catch (SqlException ex) when (ex.Number is 50011 or 50012)
+        {
+            // Control 3.1 (BOLA): no existe (50011) o no es el dueño (50012).
             return null;
         }
         catch (SqlException ex) when (ex.Number >= 50000)
