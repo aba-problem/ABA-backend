@@ -165,4 +165,33 @@ public sealed class SqlServerDashboardRepository : IDashboardRepository
             throw new SpBusinessException(ex.Number, ex.Message);
         }
     }
+
+    public async Task<UsuarioDto?> ObtenerPerfilAsync(long usuarioId, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.AbrirAsync(ct);
+        await using var cmd = new SqlCommand("dbo.sp_ObtenerPerfilUsuario", conn)
+        {
+            CommandType = CommandType.StoredProcedure,
+        };
+        cmd.Parameters.Add("@UsuarioId", SqlDbType.Int).Value = (int)usuarioId;
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+            return null;
+
+        return new UsuarioDto
+        {
+            UsuarioId = reader.GetInt32(reader.GetOrdinal("UsuarioId")),
+            Nombre = reader.GetString(reader.GetOrdinal("Nombre")),
+            Correo = reader.GetString(reader.GetOrdinal("Correo")),
+            AvatarUrl = reader.IsDBNull(reader.GetOrdinal("AvatarUrl"))
+                ? null
+                : reader.GetString(reader.GetOrdinal("AvatarUrl")),
+            Proveedor = reader.GetString(reader.GetOrdinal("Proveedor")),
+            FechaCreacion = reader.GetDateTime(reader.GetOrdinal("FechaCreacion")),
+            UltimoLogin = reader.IsDBNull(reader.GetOrdinal("UltimoLogin"))
+                ? null
+                : reader.GetDateTime(reader.GetOrdinal("UltimoLogin")),
+        };
+    }
 }

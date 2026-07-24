@@ -30,4 +30,9 @@ public interface IDashboardRepository
     /// True si se desactivó. False si ya estaba ELIMINADA (no-op).
     /// </summary>
     Task<bool?> DesactivarAsync(long baseDeDatosId, long usuarioId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Invoca sp_ObtenerPerfilUsuario — retorna el perfil del usuario autenticado.
+    /// </summary>
+    Task<UsuarioDto?> ObtenerPerfilAsync(long usuarioId, CancellationToken ct = default);
 }

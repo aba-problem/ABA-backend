@@ -105,6 +105,21 @@ public sealed class DashboardController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Retorna el perfil del usuario autenticado.</summary>
+    [HttpGet("perfil")]
+    [EnableRateLimiting("sliding")]
+    public async Task<IActionResult> Perfil(CancellationToken ct)
+    {
+        if (!TryUsuarioId(out var usuarioId))
+            return Unauthorized();
+
+        var perfil = await _repo.ObtenerPerfilAsync(usuarioId, ct);
+        if (perfil is null)
+            return NotFound();
+
+        return Ok(perfil);
+    }
+
     private bool TryUsuarioId(out long usuarioId)
     {
         var sub = User.FindFirstValue(JwtRegisteredClaimNames.Sub)
