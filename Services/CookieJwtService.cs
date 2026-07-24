@@ -27,9 +27,10 @@ public interface ICookieJwtService
 /// SameSite=Strict, Path=/, expiración corta + refresh token HttpOnly con rotación en cada uso.
 /// El backend NUNCA devuelve el JWT en el body JSON. El frontend nunca manipula el token.
 ///
-/// SameSite=Strict es válido aquí porque el frontend (aba.andrescortes.dev) y la API
-/// (api.aba.andrescortes.dev) comparten sitio registrable. El único punto donde el flujo
-/// OAuth necesita Lax es la cookie de correlación del handler, gestionada por el framework.
+/// SameSite=Strict es válido para access_token y refresh_token porque el backend los
+/// lee DIRECTAMENTE de HttpContext.Request.Cookies en la misma request — no necesitan
+/// viajar a través de cross-origin requests. Solo XSRF-TOKEN y __CSRF necesitan None
+/// porque el frontend los lee/envía en requests cross-origin (subdominios distintos).
 /// </summary>
 public sealed class CookieJwtService : ICookieJwtService
 {
