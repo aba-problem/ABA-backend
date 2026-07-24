@@ -115,7 +115,7 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.Name = "__CSRF";
     options.Cookie.HttpOnly = true;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-    options.Cookie.SameSite = SameSiteMode.None;    // cross-origin: subdominios distintos
+    options.Cookie.SameSite = SameSiteMode.Strict;    // cross-origin: subdominios distintos
 });
 
 builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo("/keys")).SetApplicationName("abaproblem");

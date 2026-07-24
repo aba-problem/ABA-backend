@@ -251,7 +251,7 @@ public sealed class AuthController : ControllerBase
         {
             HttpOnly = false,               // el frontend DEBE poder leerla (Double Submit Cookie)
             Secure = true,                  // solo sobre HTTPS
-            SameSite = SameSiteMode.None,   // OBLIGATORIO para cross-origin (subdominios distintos)
+            SameSite = SameSiteMode.Strict,   // OBLIGATORIO para cross-origin (subdominios distintos)
             Path = "/",
         });
         return NoContent();
