@@ -109,13 +109,21 @@ builder.Services.AddMemoryCache(options => options.SizeLimit = 2000);
 //  navegador descarta la cookie en requests cross-origin aunque se use
 //  credentials:'include'.
 // ─────────────────────────────────────────────────────────────────────────────
+// Extraer host del frontend para el Domain de las cookies CSRF.
+// La cookie XSRF-TOKEN (HttpOnly=false) DEBE ser legible por document.cookie en el
+// dominio del frontend (aba.andrescortes.dev). Sin Domain explícito, el browser la
+// scoped al host exacto que la setea (api.aba.andrescortes.dev) y JavaScript en el
+// frontend no puede leerla → readXsrfToken() siempre devuelve null → header nunca
+// se envía → CSRF_INVALIDO en cada POST.
+var frontendHost = new Uri(frontendOrigin).Host;  // "aba.andrescortes.dev"
 builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-CSRF-TOKEN";
     options.Cookie.Name = "__CSRF";
+    options.Cookie.Domain = frontendHost;          // legible desde el dominio del frontend
     options.Cookie.HttpOnly = true;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-    options.Cookie.SameSite = SameSiteMode.Strict;    // cross-origin: subdominios distintos
+    options.Cookie.SameSite = SameSiteMode.None;   // None: cross-origin entre subdominios
 });
 
 builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo("/keys")).SetApplicationName("abaproblem");

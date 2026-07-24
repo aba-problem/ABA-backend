@@ -242,16 +242,17 @@ public sealed class AuthController : ControllerBase
         var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
         // El request token se expone en cookie legible por JS (patrón double-submit); el
         // token de validación viaja en cookie HttpOnly gestionada por el framework.
-        // SameSite=None es OBLIGATORIO aquí: el frontend (aba.andrescortes.dev) y la API
-        // (api.aba.andrescortes.dev) son subdominios distintos = "cross-site" para el
-        // navegador. Con Strict o Lax, el navegador DESCARTA la cookie en cualquier
-        // petición cross-origin, sin importar credentials:'include'. El par __CSRF
-        // (HttpOnly) también necesita None por la misma razón.
+        // Domain = frontendHost: CRÍTICO para que document.cookie en aba.andrescortes.dev
+        // pueda leer la cookie. Sin Domain explícito, el browser la scopea al host exacto
+        // (api.aba.andrescortes.dev) y JavaScript no la ve → readXsrfToken() → null.
+        // SameSite=None: cross-origin entre subdominios.
+        var frontendHost = new Uri(_frontendBaseUrl).Host;
         Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken!, new CookieOptions
         {
             HttpOnly = false,               // el frontend DEBE poder leerla (Double Submit Cookie)
             Secure = true,                  // solo sobre HTTPS
-            SameSite = SameSiteMode.Strict,   // OBLIGATORIO para cross-origin (subdominios distintos)
+            SameSite = SameSiteMode.None,   // None: cross-origin entre subdominios
+            Domain = frontendHost,          // legible desde aba.andrescortes.dev
             Path = "/",
         });
         return NoContent();
