@@ -21,15 +21,18 @@ namespace abaproblem.Controllers;
 public sealed class ProvisioningController : ControllerBase
 {
     private readonly IProvisioningOrchestrator _orchestrator;
+    private readonly IMySqlWhitelistSyncService _mysqlWhitelistSync;
     private readonly IAntiforgery _antiforgery;
     private readonly ILogger<ProvisioningController> _logger;
 
     public ProvisioningController(
         IProvisioningOrchestrator orchestrator,
+        IMySqlWhitelistSyncService mysqlWhitelistSync,
         IAntiforgery antiforgery,
         ILogger<ProvisioningController> logger)
     {
         _orchestrator = orchestrator;
+        _mysqlWhitelistSync = mysqlWhitelistSync;
         _antiforgery = antiforgery;
         _logger = logger;
     }
@@ -64,6 +67,27 @@ public sealed class ProvisioningController : ControllerBase
             // Control 2.1 — la contraseña se devuelve UNA SOLA VEZ aquí; NO se loguea.
             _logger.LogInformation("Aprovisionamiento OK usuarioId={UsuarioId} baseId={BaseId} motor={Motor}",
                 usuarioId, resultado.BaseDeDatosId, resultado.Motor);
+
+            // BUG DE CIERRE: si el usuario aprovisiona una base MySQL DESPUÉS de su último
+            // login (sesión aún viva), la whitelist de UsuarioIp ya existía en ABA_Control
+            // pero el espejo aba_seguridad.whitelist_ip nunca se poblaba — la única vez que
+            // el sync corría (en el login) todavía no había ninguna base MySQL que sincronizar.
+            // Best-effort real: aislado en su propio try/catch — el aprovisionamiento YA
+            // tuvo éxito: un fallo del sync (p.ej. MySQL caído) nunca debe convertirse en un
+            // 500 para el cliente ni colarse a los catch de SpBusinessException/ProvisioningEngineException.
+            if (string.Equals(resultado.Motor, "MySQL", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    await _mysqlWhitelistSync.SincronizarAsync(usuarioId, ct);
+                }
+                catch (Exception syncEx)
+                {
+                    _logger.LogError(syncEx,
+                        "Aprovisionamiento OK pero falló la sincronización de whitelist MySQL usuarioId={UsuarioId} baseId={BaseId}",
+                        usuarioId, resultado.BaseDeDatosId);
+                }
+            }
 
             return Ok(resultado);
         }
