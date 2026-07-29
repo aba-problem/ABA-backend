@@ -65,6 +65,19 @@ public sealed class MySqlProvisioningService : IMySqlProvisioningService
             {
                 await cmd.ExecuteNonQueryAsync(ct);
             }
+
+            // sql/005_logon_trigger_mysql.sql: init_connect ejecuta CALL aba_seguridad.
+            // sp_validar_conexion() con los privilegios del usuario QUE SE CONECTA (no los
+            // del DEFINER). Sin este GRANT puntual, init_connect falla para TODO tenant sin
+            // importar su whitelist — la conexión se rechaza incluso con IP autorizada.
+            // Alcance mínimo: SOLO permite invocar este procedimiento puntual (que ni
+            // siquiera acepta parámetros y solo evalúa USER() de la sesión actual) — NO
+            // otorga SELECT sobre aba_seguridad.whitelist_ip ni acceso a datos de otros tenants.
+            await using (var cmd = new MySqlCommand(
+                $"GRANT EXECUTE ON PROCEDURE aba_seguridad.sp_validar_conexion TO '{usuarioBaseDatos}'@'%';", conn))
+            {
+                await cmd.ExecuteNonQueryAsync(ct);
+            }
         }
         catch (Exception ex)
         {

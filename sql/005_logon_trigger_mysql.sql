@@ -37,8 +37,16 @@ DELIMITER $$
 
 CREATE PROCEDURE aba_seguridad.sp_validar_conexion()
 BEGIN
-    DECLARE v_usuario   VARCHAR(32);
-    DECLARE v_ip        VARCHAR(45);
+    -- CHARACTER SET/COLLATE explícito: SIN esto, las variables heredan el charset
+    -- de la SESIÓN que ejecutó este CREATE PROCEDURE (ej. latin1 si el cliente mysql
+    -- no forzó utf8mb4), mientras que la tabla whitelist_ip usa utf8mb4_0900_ai_ci
+    -- (default del schema). El choque de collations al comparar usuario_bd = v_usuario
+    -- hace que el SP truene con un error real ("init_connect command failed") en vez
+    -- de nuestro SIGNAL intencional — rechazando TODAS las conexiones, sin importar
+    -- si la IP está bien en la whitelist. Debe coincidir con la collation real de la
+    -- tabla (confirmar con: SHOW FULL COLUMNS FROM aba_seguridad.whitelist_ip;).
+    DECLARE v_usuario   VARCHAR(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_ip        VARCHAR(45)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_permitido INT DEFAULT 0;
 
     -- USER() devuelve 'nombre@host' tal como se conectó el cliente
