@@ -4,19 +4,23 @@ name: CD
 # en la rama main. Así nunca desplegamos código que no pasó las validaciones.
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows:
+      - "CI"
     types:
       - completed
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   build-and-push:
     name: Build imagen y publicar en GHCR
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       packages: write
+
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +49,7 @@ jobs:
     name: Desplegar en el VPS
     needs: build-and-push
     runs-on: ubuntu-latest
+
     steps:
       - name: Desplegar vía SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -54,12 +59,18 @@ jobs:
           key: ${{ secrets.VPS_DEPLOY_KEY }}
           script: |
             set -e
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull ghcr.io/${{ github.repository_owner }}/aba-backend:latest
 
-            cd /opt/aba-backend   # AJUSTA esto a la ruta real del docker-compose.yml en el VPS
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
+              -u "${{ github.actor }}" \
+              --password-stdin
 
-            docker compose up -d --no-deps --force-recreate backend
+            cd /opt/aba-cluster
+
+            docker stack deploy \
+              --with-registry-auth \
+              -c stack.yml \
+              aba
 
             docker image prune -f
+
             echo "Despliegue completado: $(date)"
