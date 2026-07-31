@@ -110,15 +110,17 @@ builder.Services.AddMemoryCache(options => options.SizeLimit = 2000);
 //  frontend no puede leerla → readXsrfToken() devuelve null → header nunca se envía.
 // ─────────────────────────────────────────────────────────────────────────────
 var frontendOrigin = builder.Configuration["Frontend:BaseUrl"] ?? "https://aba.andrescortes.dev";
-var frontendHost = new Uri(frontendOrigin).Host;  // "aba.andrescortes.dev"
+var frontendUri = new Uri(frontendOrigin);
+var frontendHost = frontendUri.Host;  // "aba.andrescortes.dev" en producción
+var allowLocalCookies = builder.Environment.IsDevelopment() && frontendUri.IsLoopback;
 builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-CSRF-TOKEN";
     options.Cookie.Name = "__CSRF";
-    options.Cookie.Domain = frontendHost;          // legible desde el dominio del frontend
+    options.Cookie.Domain = allowLocalCookies ? null : frontendHost; // localhost no acepta Domain explícito
     options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-    options.Cookie.SameSite = SameSiteMode.None;   // None: cross-origin entre subdominios
+    options.Cookie.SecurePolicy = allowLocalCookies ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+    options.Cookie.SameSite = allowLocalCookies ? SameSiteMode.Lax : SameSiteMode.None;
 });
 
 builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo("/keys")).SetApplicationName("abaproblem");

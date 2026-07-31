@@ -32,6 +32,7 @@ public sealed class AuthController : ControllerBase
     private readonly IAntiforgery _antiforgery;
     private readonly ILogger<AuthController> _logger;
     private readonly string _frontendBaseUrl;
+    private readonly bool _allowLocalCookies;
 
     public AuthController(
         IUsuarioRepository usuarios,
@@ -43,6 +44,7 @@ public sealed class AuthController : ControllerBase
         ICaptchaService captcha,
         IAntiforgery antiforgery,
         IConfiguration config,
+        IWebHostEnvironment env,
         ILogger<AuthController> logger)
     {
         _usuarios = usuarios;
@@ -55,6 +57,7 @@ public sealed class AuthController : ControllerBase
         _antiforgery = antiforgery;
         _logger = logger;
         _frontendBaseUrl = (config["Frontend:BaseUrl"] ?? "https://aba.andrescortes.dev").TrimEnd('/');
+        _allowLocalCookies = env.IsDevelopment() && new Uri(_frontendBaseUrl).IsLoopback;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -246,13 +249,13 @@ public sealed class AuthController : ControllerBase
         // pueda leer la cookie. Sin Domain explícito, el browser la scopea al host exacto
         // (api.aba.andrescortes.dev) y JavaScript no la ve → readXsrfToken() → null.
         // SameSite=None: cross-origin entre subdominios.
-        var frontendHost = new Uri(_frontendBaseUrl).Host;
+        var frontendUri = new Uri(_frontendBaseUrl);
         Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken!, new CookieOptions
         {
             HttpOnly = false,               // el frontend DEBE poder leerla (Double Submit Cookie)
-            Secure = true,                  // solo sobre HTTPS
-            SameSite = SameSiteMode.None,   // None: cross-origin entre subdominios
-            Domain = frontendHost,          // legible desde aba.andrescortes.dev
+            Secure = !_allowLocalCookies,   // HTTPS en producción; permite http://localhost solo en dev
+            SameSite = _allowLocalCookies ? SameSiteMode.Lax : SameSiteMode.None,
+            Domain = _allowLocalCookies ? null : frontendUri.Host,
             Path = "/",
         });
         return NoContent();
