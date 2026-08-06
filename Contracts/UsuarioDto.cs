@@ -13,4 +13,7 @@ public sealed record UsuarioDto
     public required string Proveedor { get; init; }
     public required DateTime FechaCreacion { get; init; }
     public DateTime? UltimoLogin { get; init; }
+
+    /// <summary>Entregable 3 — controla acceso a /admin/dns. Nunca lo decide el cliente.</summary>
+    public bool EsAdmin { get; init; }
 }

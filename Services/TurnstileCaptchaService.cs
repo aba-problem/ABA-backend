@@ -25,18 +25,22 @@ public sealed class TurnstileCaptchaService : ICaptchaService
         if (string.IsNullOrWhiteSpace(token))
             return false;
 
-        var secret = _config["Captcha:TurnstileSecretKey"]
-            ?? throw new InvalidOperationException("Captcha:TurnstileSecretKey no configurada.");
-
-        var contenido = new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["secret"] = secret,
-            ["response"] = token,
-            ["remoteip"] = ip,
-        });
-
         try
         {
+            var secret = _config["Captcha:TurnstileSecretKey"];
+            if (string.IsNullOrWhiteSpace(secret))
+            {
+                _logger.LogError("Captcha:TurnstileSecretKey no configurada — negando por fail-closed.");
+                return false;
+            }
+
+            var contenido = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["secret"] = secret,
+                ["response"] = token,
+                ["remoteip"] = ip,
+            });
+
             var respuesta = await _http.PostAsync("https://challenges.cloudflare.com/turnstile/v0/siteverify", contenido, ct);
             var json = await respuesta.Content.ReadAsStringAsync(ct);
             using var doc = JsonDocument.Parse(json);
@@ -44,8 +48,6 @@ public sealed class TurnstileCaptchaService : ICaptchaService
         }
         catch (Exception ex)
         {
-            // Fail-closed: si Cloudflare no responde, NO dejamos pasar el login sin captcha
-            // cuando el captcha era obligatorio para esa IP. Mejor negar que dejar un hueco.
             _logger.LogWarning(ex, "Fallo al validar captcha con Turnstile");
             return false;
         }

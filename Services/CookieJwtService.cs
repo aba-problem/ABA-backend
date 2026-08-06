@@ -69,28 +69,39 @@ public sealed class CookieJwtService : ICookieJwtService
         var accessExp = DateTime.UtcNow.AddMinutes(_accessMinutes);
         var refreshExp = DateTime.UtcNow.AddDays(_refreshDays);
 
-        var access = ConstruirToken(new[]
+        var claimsAccess = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, usuario.UsuarioId.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, usuario.Correo),
-            new Claim("name", usuario.Nombre),
-            new Claim("provider", usuario.Proveedor),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
-        }, accessExp);
+            new(JwtRegisteredClaimNames.Sub, usuario.UsuarioId.ToString()),
+            new(JwtRegisteredClaimNames.Email, usuario.Correo),
+            new("name", usuario.Nombre),
+            new("provider", usuario.Proveedor),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+        };
+        // Entregable 3 — rol para [Authorize(Roles="Admin")] en /admin/dns. Se decide
+        // EXCLUSIVAMENTE por lo que ya vino de ABA_Control (sp_CrearUsuario.EsAdmin),
+        // nunca por un valor que el cliente pueda influir.
+        if (usuario.EsAdmin)
+            claimsAccess.Add(new Claim("role", "Admin"));
+
+        var access = ConstruirToken(claimsAccess, accessExp);
 
         // Rotación: cada refresh token lleva un jti nuevo. Emitir uno nuevo en cada /refresh
         // invalida (por reemplazo) el anterior en poder del cliente. Lleva el perfil mínimo
         // para que /refresh sea autocontenido y no golpee a SQL Server en cada renovación.
-        var refresh = ConstruirToken(new[]
+        var claimsRefresh = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, usuario.UsuarioId.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, usuario.Correo),
-            new Claim("name", usuario.Nombre),
-            new Claim("provider", usuario.Proveedor),
-            new Claim("fecha_creacion", usuario.FechaCreacion.ToString("o")),
-            new Claim(RefreshTokenTypeClaim, RefreshTokenTypeValue),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
-        }, refreshExp);
+            new(JwtRegisteredClaimNames.Sub, usuario.UsuarioId.ToString()),
+            new(JwtRegisteredClaimNames.Email, usuario.Correo),
+            new("name", usuario.Nombre),
+            new("provider", usuario.Proveedor),
+            new("fecha_creacion", usuario.FechaCreacion.ToString("o")),
+            new(RefreshTokenTypeClaim, RefreshTokenTypeValue),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+        };
+        if (usuario.EsAdmin)
+            claimsRefresh.Add(new Claim("role", "Admin"));
+
+        var refresh = ConstruirToken(claimsRefresh, refreshExp);
 
         ctx.Response.Cookies.Append(AccessCookie, access, OpcionesCookie(accessExp, "/"));
         // El refresh solo viaja al endpoint que lo consume → Path acotado reduce exposición.
@@ -139,6 +150,7 @@ public sealed class CookieJwtService : ICookieJwtService
                 Nombre = principal.FindFirst("name")?.Value ?? string.Empty,
                 Proveedor = principal.FindFirst("provider")?.Value ?? string.Empty,
                 FechaCreacion = fechaCreacion,
+                EsAdmin = principal.FindFirst("role")?.Value == "Admin",
             };
             return true;
         }
