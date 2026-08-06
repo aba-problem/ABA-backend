@@ -273,6 +273,7 @@ builder.Services.AddHostedService<MySqlQuotaEnforcementService>();
 builder.Services.AddScoped<IN8nWorkspaceRepository, SqlServerN8nWorkspaceRepository>();
 builder.Services.AddScoped<IApiKeyRepository, SqlServerApiKeyRepository>();
 builder.Services.AddScoped<IDnsRepository, SqlServerDnsRepository>();
+builder.Services.AddScoped<ISesionRepository, SqlServerSesionRepository>();
 
 // GeoIP (control geográfico América/Latam, sql/003 + sql/004/005) — HttpClient con
 // timeout corto: nunca debe demorar el login si el proveedor externo está lento/caído.
