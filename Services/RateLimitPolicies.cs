@@ -63,6 +63,67 @@ public static class RateLimitPolicies
                 });
             });
 
+            // Entregable 3, Módulo N8N — "n8n-crear" por usuario: mismo Token Bucket que
+            // "provisioning" (1 workspace cada 10 min), mismo argumento: crear infraestructura
+            // real (aunque sea lógica, no un contenedor) nunca debe permitir ráfagas.
+            options.AddPolicy("n8n-crear", context =>
+            {
+                var userId = IdentificarPartición(context);
+                return RateLimitPartition.GetTokenBucketLimiter(userId, _ => new TokenBucketRateLimiterOptions
+                {
+                    TokenLimit = 1,
+                    TokensPerPeriod = 1,
+                    ReplenishmentPeriod = TimeSpan.FromMinutes(10),
+                    QueueLimit = 0,
+                    AutoReplenishment = true,
+                });
+            });
+
+            // Entregable 3, Módulo IA — "apikeys-crear" por usuario: Fixed Window, más
+            // permisivo que provisioning/n8n (no aprovisiona infraestructura real), pero
+            // igual acotado para frenar el "farming" de keys.
+            options.AddPolicy("apikeys-crear", context =>
+            {
+                var userId = IdentificarPartición(context);
+                return RateLimitPartition.GetFixedWindowLimiter(userId, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 5,
+                    Window = TimeSpan.FromHours(1),
+                    QueueLimit = 0,
+                });
+            });
+
+            // Entregable 3, Módulo IA — "ai-service" particionado por ApiKeyId (NO por IP):
+            // el consumo real es por key, no por origen de red (puede venir de un servidor
+            // de terceros compartiendo IP con muchos otros clientes).
+            options.AddPolicy("ai-service", context =>
+            {
+                var apiKeyId = context.User.FindFirst("apiKeyId")?.Value ?? "anon";
+                return RateLimitPartition.GetTokenBucketLimiter(apiKeyId, _ => new TokenBucketRateLimiterOptions
+                {
+                    TokenLimit = 20,
+                    TokensPerPeriod = 20,
+                    ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true,
+                });
+            });
+
+            // Entregable 3, Módulo DNS — "dns-crear" por usuario: Token Bucket, cada
+            // registro toca un proveedor externo real (Cloudflare) — ráfagas controladas.
+            options.AddPolicy("dns-crear", context =>
+            {
+                var userId = IdentificarPartición(context);
+                return RateLimitPartition.GetTokenBucketLimiter(userId, _ => new TokenBucketRateLimiterOptions
+                {
+                    TokenLimit = 1,
+                    TokensPerPeriod = 1,
+                    ReplenishmentPeriod = TimeSpan.FromMinutes(5),
+                    QueueLimit = 0,
+                    AutoReplenishment = true,
+                });
+            });
+
             // Control 4.1 — política "landing" por IP: Sliding Window agresivo (endpoint público sin auth).
             options.AddPolicy("landing", context =>
             {

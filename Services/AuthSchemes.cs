@@ -11,4 +11,7 @@ public static class AuthSchemes
 
     public const string Google = "Google";
     public const string GitHub = "GitHub";
+
+    /// <summary>Entregable 3 — esquema separado para /ai/completar: header X-API-Key, no cookies.</summary>
+    public const string ApiKey = "ApiKey";
 }

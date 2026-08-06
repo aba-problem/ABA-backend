@@ -81,6 +81,10 @@ MapEnv("ReverseProxy:TrustedNetwork", "REVERSE_PROXY_TRUSTED_NETWORK");
 MapEnv("MySql:AdminConnectionString", "MYSQL_ADMIN_CONNECTION_STRING");
 MapEnv("Captcha:TurnstileSiteKey", "TURNSTILE_SITE_KEY");
 MapEnv("Captcha:TurnstileSecretKey", "TURNSTILE_SECRET_KEY");
+// Entregable 3, Módulo DNS — Cloudflare ya gestiona andrescortes.dev.
+MapEnv("Dns:CloudflareApiToken", "CLOUDFLARE_API_TOKEN");
+MapEnv("Dns:CloudflareZoneId", "CLOUDFLARE_ZONE_ID");
+MapEnv("Dns:DominioBase", "DNS_DOMINIO_BASE");
 builder.Configuration.AddInMemoryCollection(mapaEnv);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -204,7 +208,11 @@ builder.Services.AddAuthentication(options =>
         options.SaveTokens = false;
         options.Scope.Add("user:email");
         options.ClaimActions.MapJsonKey("avatar_url", "avatar_url");
-    });
+    })
+    // 5) Entregable 3, Módulo IA — esquema separado para /ai/completar (header X-API-Key).
+    //    NUNCA es el esquema por defecto: los endpoints de cookie no deben aceptar una
+    //    API key, ni /ai/completar debe aceptar la cookie de sesión del usuario.
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(AuthSchemes.ApiKey, _ => { });
 
 builder.Services.AddAuthorization();
 
@@ -263,6 +271,12 @@ builder.Services.AddScoped<IProvisioningOrchestrator, ProvisioningOrchestrator>(
 builder.Services.AddScoped<IMySqlWhitelistSyncService, MySqlWhitelistSyncService>();
 builder.Services.AddHostedService<MySqlQuotaEnforcementService>();
 
+// Entregable 3 — N8N, IA como Servicio, DNS Autoservicio.
+builder.Services.AddScoped<IN8nWorkspaceRepository, SqlServerN8nWorkspaceRepository>();
+builder.Services.AddScoped<IApiKeyRepository, SqlServerApiKeyRepository>();
+builder.Services.AddScoped<IDnsRepository, SqlServerDnsRepository>();
+builder.Services.AddScoped<ISesionRepository, SqlServerSesionRepository>();
+
 // GeoIP (control geográfico América/Latam, sql/003 + sql/004/005) — HttpClient con
 // timeout corto: nunca debe demorar el login si el proveedor externo está lento/caído.
 builder.Services.AddHttpClient<IGeoIpService, GeoIpService>(client =>
@@ -275,6 +289,19 @@ builder.Services.AddHttpClient<IGeoIpService, GeoIpService>(client =>
 builder.Services.AddHttpClient<ICaptchaService, TurnstileCaptchaService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(5);
+});
+
+// Entregable 3, Módulo DNS — Cloudflare API real. Mismo patrón: timeout corto, el token
+// se setea aquí como header por defecto (nunca se concatena manualmente en cada llamada
+// ni se loguea). Si el token no está configurado, las llamadas fallarán con 401/403 desde
+// Cloudflare — CrearRegistroAsync/EliminarRegistroAsync ya tratan eso como fallo no fatal.
+builder.Services.AddHttpClient<IDnsProviderService, CloudflareDnsProviderService>(client =>
+{
+    client.BaseAddress = new Uri("https://api.cloudflare.com/");
+    client.Timeout = TimeSpan.FromSeconds(5);
+    var cloudflareToken = builder.Configuration["Dns:CloudflareApiToken"];
+    if (!string.IsNullOrWhiteSpace(cloudflareToken))
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", cloudflareToken);
 });
 
 var app = builder.Build();
