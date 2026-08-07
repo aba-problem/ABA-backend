@@ -25,7 +25,7 @@ No test project exists in this repo. There is no linter beyond the C# compiler/n
 
 Git hooks (pre-commit secret scan) aren't active by default per clone — run `git config core.hooksPath hooks` once, and `chmod +x hooks/pre-commit` on Linux/macOS.
 
-SQL scripts in `sql/` must run **in numeric order** against SQL Server — each depends on schema/SPs from the ones before it: `001_init_control_db.sql` → `002_stored_procedures.sql` → `003_sp_ip_whitelist.sql` → `004_logon_trigger_sqlserver.sql` → `005_logon_trigger_mysql.sql` → `006_resource_governor_y_limites_conexion.sql` → `007_extensiones_backend.sql` → `008_perfil_usuario.sql` → `009_celulas_socias.sql` → `010_paises_global.sql`.
+SQL scripts in `sql/` must run **in numeric order** against SQL Server — each depends on schema/SPs from the ones before it: `001_init_control_db.sql` → `002_stored_procedures.sql` → `003_sp_ip_whitelist.sql` → `004_logon_trigger_sqlserver.sql` → `005_logon_trigger_mysql.sql` → `006_resource_governor_y_limites_conexion.sql` → `007_extensiones_backend.sql` → `008_perfil_usuario.sql` → `009_n8n_workspaces.sql` → `010_api_keys.sql` → `011_dns_registros.sql` → `012_sesiones.sql` → `013_celulas_socias.sql` → `014_paises_global.sql`.
 
 ## Architecture
 

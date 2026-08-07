@@ -51,6 +51,7 @@ public sealed class SqlServerUsuarioRepository : IUsuarioRepository
                 UltimoLogin = reader.IsDBNull(reader.GetOrdinal("UltimoLogin"))
                     ? null
                     : reader.GetDateTime(reader.GetOrdinal("UltimoLogin")),
+                EsAdmin = reader.GetBoolean(reader.GetOrdinal("EsAdmin")),
             };
         }
         catch (SqlException ex) when (ex.Number >= 50000)

@@ -192,6 +192,7 @@ public sealed class SqlServerDashboardRepository : IDashboardRepository
             UltimoLogin = reader.IsDBNull(reader.GetOrdinal("UltimoLogin"))
                 ? null
                 : reader.GetDateTime(reader.GetOrdinal("UltimoLogin")),
+            EsAdmin = reader.GetBoolean(reader.GetOrdinal("EsAdmin")),
         };
     }
 }

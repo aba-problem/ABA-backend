@@ -24,7 +24,7 @@ public sealed class SqlServerPartnersProvisioningRepository : IPartnersProvision
             CommandTimeout = 30,
         };
 
-        // celulaSociaId proviene SIEMPRE del claim resuelto por ApiKeyAuthenticationHandler
+        // celulaSociaId proviene SIEMPRE del claim resuelto por PartnerApiKeyAuthenticationHandler
         // (control BOLA), nunca del body de la request.
         cmd.Parameters.Add("@CelulaSociaId", SqlDbType.Int).Value = celulaSociaId;
         cmd.Parameters.Add("@NombreMotor", SqlDbType.VarChar, 30).Value = nombreMotor;

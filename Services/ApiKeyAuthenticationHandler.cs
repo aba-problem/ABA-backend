@@ -9,21 +9,28 @@ using Microsoft.Extensions.Options;
 namespace abaproblem.Services;
 
 /// <summary>
-/// Módulo 8 — Autenticación server-to-server para el endpoint de células socias
-/// (Aba/INVESTIGACION-PROXY-MYSQL.md § 8). Lee `Authorization: Bearer &lt;api-key&gt;`, hashea
-/// la key (SHA-256, mecánico — no es lógica de negocio) y le pregunta a ABA_Control, vía
-/// ICelulaSociaRepository, si es válida. Nunca decide acá qué célula es ni cuál es su
-/// prefijo: esos datos vienen del SP y se exponen como claims para que el controller los use.
+/// Entregable 3 — Módulo IA como Servicio. Esquema de autenticación separado del JWT de
+/// cookies: lee el header "X-API-Key" (NUNCA acepta la key por query string — un query
+/// param queda en logs de Nginx/proxies y en el historial del navegador).
+///
+/// Formato esperado: "sk_" + prefijo(8) + secreto(24). El prefijo localiza la fila
+/// candidata sin escanear toda la tabla (sp_ObtenerApiKeyPorPrefijo, indexado); el hash
+/// SHA-256 de la key COMPLETA se compara contra ApiKey.KeyHash con
+/// <see cref="CryptographicOperations.FixedTimeEquals"/> — nunca == ni SequenceEqual,
+/// que retornan en el primer byte distinto y filtran cuánto del hash coincidió (timing attack).
 /// </summary>
 public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
-    private readonly ICelulaSociaRepository _repo;
+    private const string HeaderName = "X-API-Key";
+    private const string Prefijo = "sk_";
+
+    private readonly IApiKeyRepository _repo;
 
     public ApiKeyAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
-        ICelulaSociaRepository repo)
+        IApiKeyRepository repo)
         : base(options, logger, encoder)
     {
         _repo = repo;
@@ -31,32 +38,34 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<Authenti
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Headers.TryGetValue("Authorization", out var header))
+        if (!Request.Headers.TryGetValue(HeaderName, out var valores) || valores.Count == 0)
             return AuthenticateResult.NoResult();
 
-        var value = header.ToString();
-        if (!value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            return AuthenticateResult.NoResult();
+        var keyCompleta = valores.ToString();
+        // "sk_" + prefijo(8) = mínimo 11 caracteres antes del secreto.
+        if (string.IsNullOrWhiteSpace(keyCompleta) || !keyCompleta.StartsWith(Prefijo, StringComparison.Ordinal)
+            || keyCompleta.Length < Prefijo.Length + 8)
+        {
+            return AuthenticateResult.Fail("API key con formato inválido.");
+        }
 
-        var apiKey = value["Bearer ".Length..].Trim();
-        if (apiKey.Length == 0)
-            return AuthenticateResult.Fail("API key vacía.");
+        var prefijoCandidato = keyCompleta.Substring(Prefijo.Length, 8);
 
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(apiKey));
+        var candidata = await _repo.ObtenerPorPrefijoAsync(prefijoCandidato, Context.RequestAborted);
+        if (candidata is null || !candidata.Activa)
+            return AuthenticateResult.Fail("API key inválida o revocada."); // mensaje genérico — no distingue "no existe" de "revocada"
 
-        var celula = await _repo.ValidarApiKeyAsync(hash, Context.RequestAborted);
-        if (celula is null)
-            return AuthenticateResult.Fail("API key inválida.");
+        var hashRecibido = SHA256.HashData(Encoding.UTF8.GetBytes(keyCompleta));
+        if (!CryptographicOperations.FixedTimeEquals(hashRecibido, candidata.KeyHash))
+            return AuthenticateResult.Fail("API key inválida o revocada.");
 
         var claims = new[]
         {
-            new Claim("celulaId", celula.CelulaId.ToString()),
-            new Claim("nombreCelula", celula.NombreCelula),
-            new Claim("prefijo", celula.Prefijo),
+            new Claim(ClaimTypes.NameIdentifier, candidata.UsuarioId.ToString()),
+            new Claim("apiKeyId", candidata.Id.ToString()),
         };
         var identity = new ClaimsIdentity(claims, Scheme.Name);
-        var principal = new ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, Scheme.Name);
+        var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name);
         return AuthenticateResult.Success(ticket);
     }
 }

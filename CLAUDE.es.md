@@ -25,7 +25,7 @@ No existe proyecto de tests en este repo. No hay linter más allá del compilado
 
 Los git hooks (escaneo de secretos en pre-commit) no están activos por defecto en cada clon — corre `git config core.hooksPath hooks` una vez, y `chmod +x hooks/pre-commit` en Linux/macOS.
 
-Los scripts SQL en `sql/` deben correrse **en orden numérico** contra SQL Server — cada uno depende del esquema/SPs de los anteriores: `001_init_control_db.sql` → `002_stored_procedures.sql` → `003_sp_ip_whitelist.sql` → `004_logon_trigger_sqlserver.sql` → `005_logon_trigger_mysql.sql` → `006_resource_governor_y_limites_conexion.sql` → `007_extensiones_backend.sql` → `008_perfil_usuario.sql` → `009_celulas_socias.sql` → `010_paises_global.sql`.
+Los scripts SQL en `sql/` deben correrse **en orden numérico** contra SQL Server — cada uno depende del esquema/SPs de los anteriores: `001_init_control_db.sql` → `002_stored_procedures.sql` → `003_sp_ip_whitelist.sql` → `004_logon_trigger_sqlserver.sql` → `005_logon_trigger_mysql.sql` → `006_resource_governor_y_limites_conexion.sql` → `007_extensiones_backend.sql` → `008_perfil_usuario.sql` → `009_n8n_workspaces.sql` → `010_api_keys.sql` → `011_dns_registros.sql` → `012_sesiones.sql` → `013_celulas_socias.sql` → `014_paises_global.sql`.
 
 ## Arquitectura
 

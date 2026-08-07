@@ -9,7 +9,7 @@ namespace abaproblem.Controllers;
 /// <summary>
 /// Módulo 8 — Aprovisionamiento server-to-server para células socias
 /// (Aba/INVESTIGACION-PROXY-MYSQL.md § 8). Autenticación por API key
-/// ([Authorize(AuthenticationSchemes = AuthSchemes.ApiKey)]), nunca JWT/cookie — el
+/// ([Authorize(AuthenticationSchemes = AuthSchemes.PartnerApiKey)]), nunca JWT/cookie — el
 /// llamador es el BACKEND de la célula, nunca su frontend ni un navegador.
 ///
 /// Sin CSRF: el patrón Double Submit Cookie protege contra un navegador engañado para
@@ -23,7 +23,7 @@ namespace abaproblem.Controllers;
 /// </summary>
 [ApiController]
 [Route("partners/databases")]
-[Authorize(AuthenticationSchemes = AuthSchemes.ApiKey)]
+[Authorize(AuthenticationSchemes = AuthSchemes.PartnerApiKey)]
 [EnableRateLimiting("partners")]
 public sealed class PartnersProvisioningController : ControllerBase
 {

@@ -4,7 +4,7 @@ namespace abaproblem.Repositories.Interfaces;
 
 /// <summary>
 /// Módulo 8 — Aprovisionamiento para células socias (ABA_Control.dbo.BaseDeDatosSocio,
-/// tabla separada de dbo.BaseDeDatos — ver cabecera de sql/009_celulas_socias.sql para el
+/// tabla separada de dbo.BaseDeDatos — ver cabecera de sql/013_celulas_socias.sql para el
 /// motivo). Mismo principio que IProvisioningRepository: el backend solo dispara SPs.
 /// </summary>
 public interface IPartnersProvisioningRepository
