@@ -1,4 +1,15 @@
 /* =========================================================================
+   ⚠️ DEPRECADO EN PRODUCCIÓN (2026-08-06): ProxySQL se puso delante de MySQL
+   (ver Aba/INFRAESTRUCTURA.md § 8 y Aba/INVESTIGACION-PROXY-MYSQL.md § 6.6).
+   Desde ese momento, USER() dentro de MySQL siempre muestra la IP del
+   contenedor de ProxySQL, nunca la del cliente real — el init_connect de
+   este script quedaría ciego. NO activar el flag --init-connect de más
+   abajo en un MySQL que esté detrás de ProxySQL. El esquema y el SP se
+   pueden seguir creando (compatibilidad con MySqlWhitelistSyncService),
+   pero la activación queda descartada. La whitelist de IP real, si hace
+   falta, se implementa del lado de ProxySQL (client_addr en
+   mysql_query_rules) — no implementado todavía.
+
    ABA - Plataforma de Hosting DB & Servicios para Desarrolladores
    Equivalente a "logon trigger" para MySQL
    Motor: MySQL 8.0

@@ -11,4 +11,7 @@ public static class AuthSchemes
 
     public const string Google = "Google";
     public const string GitHub = "GitHub";
+
+    /// <summary>Módulo 8 — auth server-to-server para células socias (Authorization: Bearer &lt;api-key&gt;).</summary>
+    public const string ApiKey = "ApiKey";
 }

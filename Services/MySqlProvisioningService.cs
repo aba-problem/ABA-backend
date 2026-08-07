@@ -22,12 +22,15 @@ public sealed class MySqlProvisioningService : IMySqlProvisioningService
     private static readonly Regex IdentificadorValido = new("^[a-zA-Z0-9_]{1,30}$", RegexOptions.Compiled);
 
     private readonly string _connectionString;
+    private readonly IProxySqlAdminService _proxySql;
     private readonly ILogger<MySqlProvisioningService> _logger;
 
-    public MySqlProvisioningService(IConfiguration config, ILogger<MySqlProvisioningService> logger)
+    public MySqlProvisioningService(
+        IConfiguration config, IProxySqlAdminService proxySql, ILogger<MySqlProvisioningService> logger)
     {
         _connectionString = config["MySql:AdminConnectionString"]
             ?? throw new InvalidOperationException("MySql:AdminConnectionString no configurada.");
+        _proxySql = proxySql;
         _logger = logger;
     }
 
@@ -41,6 +44,7 @@ public sealed class MySqlProvisioningService : IMySqlProvisioningService
 
         var creoBaseDatos = false;
         var creoUsuario = false;
+        var registroEnProxySql = false;
         try
         {
             // Identificadores ya validados por regex (solo [a-zA-Z0-9_]) → seguros para interpolar.
@@ -78,12 +82,19 @@ public sealed class MySqlProvisioningService : IMySqlProvisioningService
             {
                 await cmd.ExecuteNonQueryAsync(ct);
             }
+
+            // ProxySQL (delante de MySQL desde 2026-08-06, ver Aba/INFRAESTRUCTURA.md § 8) no
+            // delega autenticación al motor real — sin este registro, el estudiante existe en
+            // MySQL pero no puede conectar por el puerto público (que ahora es ProxySQL).
+            await _proxySql.RegistrarUsuarioAsync(usuarioBaseDatos, password, ct);
+            registroEnProxySql = true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Fallo creando en MySQL base={Base} usuario={Usuario}; intentando limpieza",
                 nombreBaseDatos, usuarioBaseDatos);
-            await LimpiarParcialAsync(conn, nombreBaseDatos, usuarioBaseDatos, creoBaseDatos, creoUsuario, ct);
+            await LimpiarParcialAsync(
+                conn, nombreBaseDatos, usuarioBaseDatos, creoBaseDatos, creoUsuario, registroEnProxySql, ct);
             throw;
         }
     }
@@ -130,10 +141,44 @@ public sealed class MySqlProvisioningService : IMySqlProvisioningService
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
+    public async Task EliminarBaseDeDatosAsync(string nombreBaseDatos, string usuarioBaseDatos, CancellationToken ct = default)
+    {
+        ValidarIdentificador(nombreBaseDatos, nameof(nombreBaseDatos));
+        ValidarIdentificador(usuarioBaseDatos, nameof(usuarioBaseDatos));
+
+        // Primero ProxySQL: si esto falla, el usuario queda sin poder conectar (fail-safe)
+        // en vez de quedar huérfano ahí mientras MySQL ya lo borró (fail-open).
+        await _proxySql.EliminarUsuarioAsync(usuarioBaseDatos, ct);
+
+        await using var conn = new MySqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using (var cmd = new MySqlCommand($"DROP DATABASE IF EXISTS `{nombreBaseDatos}`;", conn))
+            await cmd.ExecuteNonQueryAsync(ct);
+
+        await using (var cmd = new MySqlCommand($"DROP USER IF EXISTS '{usuarioBaseDatos}'@'%';", conn))
+            await cmd.ExecuteNonQueryAsync(ct);
+
+        _logger.LogInformation("Base eliminada en MySQL base={Base} usuario={Usuario}", nombreBaseDatos, usuarioBaseDatos);
+    }
+
     private async Task LimpiarParcialAsync(
         MySqlConnection conn, string nombreBaseDatos, string usuarioBaseDatos,
-        bool creoBaseDatos, bool creoUsuario, CancellationToken ct)
+        bool creoBaseDatos, bool creoUsuario, bool registroEnProxySql, CancellationToken ct)
     {
+        if (registroEnProxySql)
+        {
+            try
+            {
+                await _proxySql.EliminarUsuarioAsync(usuarioBaseDatos, ct);
+            }
+            catch (Exception limpiezaEx)
+            {
+                _logger.LogError(limpiezaEx,
+                    "No se pudo limpiar el usuario huérfano {Usuario} en ProxySQL tras fallo parcial", usuarioBaseDatos);
+            }
+        }
+
         if (creoUsuario)
         {
             try

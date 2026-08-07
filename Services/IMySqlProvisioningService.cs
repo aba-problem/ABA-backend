@@ -22,4 +22,13 @@ public interface IMySqlProvisioningService
 
     /// <summary>Restaura la escritura cuando el uso vuelve a estar dentro de la cuota.</summary>
     Task RestaurarEscrituraAsync(string nombreBaseDatos, string usuarioBaseDatos, CancellationToken ct = default);
+
+    /// <summary>
+    /// Módulo 8 (desaprovisionamiento real de células socias) — DROP DATABASE + DROP USER en
+    /// MySQL y limpieza del registro correspondiente en ProxySQL. A diferencia del "desactivar"
+    /// de estudiantes (soft-delete puro en ABA_Control, la BD real nunca se toca), este método
+    /// SÍ elimina la BD real — pensado para cuando un usuario final de una célula socia se da de
+    /// baja y esa célula llama DELETE explícitamente.
+    /// </summary>
+    Task EliminarBaseDeDatosAsync(string nombreBaseDatos, string usuarioBaseDatos, CancellationToken ct = default);
 }

@@ -79,6 +79,7 @@ MapEnv("Authentication:GitHub:ClientSecret", "GITHUB_CLIENT_SECRET");
 MapEnv("Frontend:BaseUrl", "FRONTEND_BASE_URL");
 MapEnv("ReverseProxy:TrustedNetwork", "REVERSE_PROXY_TRUSTED_NETWORK");
 MapEnv("MySql:AdminConnectionString", "MYSQL_ADMIN_CONNECTION_STRING");
+MapEnv("ProxySql:AdminConnectionString", "PROXYSQL_ADMIN_CONNECTION_STRING");
 MapEnv("Captcha:TurnstileSiteKey", "TURNSTILE_SITE_KEY");
 MapEnv("Captcha:TurnstileSecretKey", "TURNSTILE_SECRET_KEY");
 builder.Configuration.AddInMemoryCollection(mapaEnv);
@@ -204,7 +205,11 @@ builder.Services.AddAuthentication(options =>
         options.SaveTokens = false;
         options.Scope.Add("user:email");
         options.ClaimActions.MapJsonKey("avatar_url", "avatar_url");
-    });
+    })
+    // 5) API key — server-to-server para células socias (Módulo 8). No participa del
+    //    esquema por defecto: solo se activa donde el controller pide explícitamente
+    //    [Authorize(AuthenticationSchemes = AuthSchemes.ApiKey)].
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(AuthSchemes.ApiKey, options => { });
 
 builder.Services.AddAuthorization();
 
@@ -253,10 +258,14 @@ builder.Services.AddScoped<IIpWhitelistRepository, SqlServerIpWhitelistRepositor
 builder.Services.AddScoped<IProvisioningRepository, SqlServerProvisioningRepository>();
 builder.Services.AddScoped<IDashboardRepository, SqlServerDashboardRepository>();
 builder.Services.AddScoped<ILandingRepository, SqlServerLandingRepository>();
+builder.Services.AddScoped<ICelulaSociaRepository, SqlServerCelulaSociaRepository>();
+builder.Services.AddScoped<IPartnersProvisioningRepository, SqlServerPartnersProvisioningRepository>();
+builder.Services.AddScoped<IPartnersProvisioningOrchestrator, PartnersProvisioningOrchestrator>();
 
 // Aprovisionamiento real contra el motor elegido (MySQL externo — fuera del presupuesto
 // de RAM del Módulo 6 — o SQLServer en la MISMA instancia que ABA_Control, protegida por
 // el logon trigger de sql/004 y el Resource Governor de sql/006).
+builder.Services.AddScoped<IProxySqlAdminService, ProxySqlAdminService>();
 builder.Services.AddScoped<IMySqlProvisioningService, MySqlProvisioningService>();
 builder.Services.AddScoped<ISqlServerProvisioningService, SqlServerProvisioningService>();
 builder.Services.AddScoped<IProvisioningOrchestrator, ProvisioningOrchestrator>();

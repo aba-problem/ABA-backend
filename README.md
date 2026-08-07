@@ -43,8 +43,10 @@ hooks/          Git hooks versionados (pre-commit anti-secretos)
    CREATE USER 'aba_provisioner'@'%' IDENTIFIED BY '<password-fuerte>';
    GRANT CREATE, DROP, CREATE USER ON *.* TO 'aba_provisioner'@'%';
    GRANT GRANT OPTION ON *.* TO 'aba_provisioner'@'%';
-   GRANT SELECT ON information_schema.* TO 'aba_provisioner'@'%';
    ```
+   (No hace falta `GRANT SELECT ON information_schema.*` — en MySQL 8 ese esquema es virtual y el acceso
+   ya es implícito para cualquier cuenta; intentar otorgarlo explícitamente falla con `ERROR 1044`.
+   Confirmado al reconstruir el MySQL de producción el 2026-08-06.)
 4. Levanta todo con:
    ```
    docker compose up --build
