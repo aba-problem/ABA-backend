@@ -20,8 +20,17 @@ public sealed class ProxySqlAdminService : IProxySqlAdminService
 
     public ProxySqlAdminService(IConfiguration config, ILogger<ProxySqlAdminService> logger)
     {
-        _connectionString = config["ProxySql:AdminConnectionString"]
+        var connectionString = config["ProxySql:AdminConnectionString"]
             ?? throw new InvalidOperationException("ProxySql:AdminConnectionString no configurada.");
+
+        // Pooling=false a propósito: el admin de ProxySQL solo habla un subconjunto del
+        // protocolo MySQL (SQLite embebido detrás del wire protocol) y no maneja bien el
+        // "reset connection" que MySqlConnector manda al reutilizar una conexión pooled —
+        // confirmado en producción: la primera llamada (conexión nueva) funciona, la segunda
+        // (reset de una pooled) falla con "Operation canceled" al leer la respuesta. Esta
+        // conexión se usa poco (solo al crear/rotar/eliminar), así que no pooling no cuesta nada.
+        var builder = new MySqlConnectionStringBuilder(connectionString) { Pooling = false };
+        _connectionString = builder.ConnectionString;
         _logger = logger;
     }
 
