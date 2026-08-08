@@ -59,9 +59,14 @@ public sealed class ProxySqlAdminService : IProxySqlAdminService
 
     private static async Task AplicarCambiosAsync(MySqlConnection conn, CancellationToken ct)
     {
+        // Dos comandos separados, no uno solo con ";" — el parser admin de ProxySQL no
+        // soporta multi-statement en una sola query (a diferencia de un MySQL real).
         // LOAD aplica el cambio a las conexiones nuevas; SAVE lo persiste en disco para que
         // sobreviva un restart del contenedor de ProxySQL.
-        await using var cmd = new MySqlCommand("LOAD MYSQL USERS TO RUNTIME; SAVE MYSQL USERS TO DISK;", conn);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await using (var cmd = new MySqlCommand("LOAD MYSQL USERS TO RUNTIME;", conn))
+            await cmd.ExecuteNonQueryAsync(ct);
+
+        await using (var cmd = new MySqlCommand("SAVE MYSQL USERS TO DISK;", conn))
+            await cmd.ExecuteNonQueryAsync(ct);
     }
 }
