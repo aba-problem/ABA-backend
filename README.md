@@ -57,12 +57,103 @@ hooks/          Git hooks versionados (pre-commit anti-secretos)
 
 ## Endpoints
 
-| Módulo | Endpoint | Auth |
+Inventario completo de los 11 controllers en `Controllers/` — no solo los 4 módulos originales.
+"Auth" indica el esquema real de autenticación (`[Authorize]` = cookie JWT del usuario;
+`ApiKey`/`PartnerApiKey` = header, para consumo server-to-server, nunca navegador).
+
+### Auth (`AuthController`, `/auth`)
+
+| Método | Ruta | Auth |
 |---|---|---|
-| 1 — Auth | `/auth/{google,github}/{login,callback}`, `/auth/logout`, `/auth/refresh`, `/auth/csrf` | público/mixto |
-| 2 — Provisioning | `POST /provisioning/crear` | `[Authorize]` |
-| 3 — Dashboard | `GET /dashboard/bases`, `/dashboard/bases/{id}`, `/dashboard/bases/{id}/credencial` | `[Authorize]` |
-| 4 — Landing | `GET /stats` | público (rate-limitado) |
+| GET | `/auth/google/login`, `/auth/github/login` | público |
+| GET | `/auth/{google\|github}/procesar` | público (callback OAuth) |
+| POST | `/auth/refresh` | cookie JWT |
+| POST | `/auth/logout` | `[Authorize]` |
+| GET | `/auth/csrf` | público |
+
+### Provisioning — estudiantes (`ProvisioningController`, `/provisioning`)
+
+| Método | Ruta | Auth | Rate limit |
+|---|---|---|---|
+| POST | `/provisioning/crear` | `[Authorize]` | `provisioning` (1 base / 10 min por usuario) |
+
+### Dashboard (`DashboardController`, `/dashboard`)
+
+| Método | Ruta | Auth |
+|---|---|---|
+| GET | `/dashboard/bases` | `[Authorize]` |
+| GET | `/dashboard/bases/{id}` | `[Authorize]` |
+| GET | `/dashboard/bases/{id}/credencial` | `[Authorize]` |
+| DELETE | `/dashboard/bases/{id}` | `[Authorize]` |
+| GET | `/dashboard/perfil` | `[Authorize]` |
+
+### Landing (`LandingController`)
+
+| Método | Ruta | Auth |
+|---|---|---|
+| GET | `/stats` | público (rate limit `landing`) |
+
+### Módulo 8 — Aprovisionamiento para células socias (`PartnersProvisioningController`, `/partners/databases`)
+
+Server-to-server; ver [`Aba/API-CELULAS-SOCIAS.md`](../Aba/API-CELULAS-SOCIAS.md) para el contrato completo pensado
+para equipos externos.
+
+| Método | Ruta | Auth | Rate limit |
+|---|---|---|---|
+| POST | `/partners/databases` | `AuthSchemes.PartnerApiKey` (`Authorization: Bearer <key>`) | `partners` (ráfaga 5, recarga 1/2min por célula) |
+| GET | `/partners/databases/{id}` | `AuthSchemes.PartnerApiKey` | `partners` |
+| DELETE | `/partners/databases/{id}` | `AuthSchemes.PartnerApiKey` | `partners` |
+| POST | `/partners/databases/{id}/credenciales/reset` | `AuthSchemes.PartnerApiKey` | `partners` |
+
+### API Keys — gestión propia (`ApiKeysController`, `/apikeys`)
+
+Gestión vía cookie JWT (la app web del usuario administrando sus keys). El *uso* de la key es un
+esquema separado, ver `AiController` abajo.
+
+| Método | Ruta | Auth | Rate limit |
+|---|---|---|---|
+| POST | `/apikeys/crear` | `[Authorize]` | `apikeys-crear` |
+| GET | `/apikeys` | `[Authorize]` | — |
+| POST | `/apikeys/{id}/revocar` | `[Authorize]` | — |
+| GET | `/apikeys/{id}/consumo` | `[Authorize]` | — |
+
+### IA como Servicio (`AiController`, `/ai`)
+
+| Método | Ruta | Auth |
+|---|---|---|
+| POST | `/ai/completar` | `AuthSchemes.ApiKey` (header `X-API-Key`) |
+
+Andamiaje de auth/rate-limit/auditoría completo; la integración con un proveedor real de IA
+queda pendiente (swap trivial una vez decidido el proveedor).
+
+### DNS autoservicio (`DnsController`, `/dns`)
+
+| Método | Ruta | Auth |
+|---|---|---|
+| POST | `/dns/crear` | `[Authorize]` |
+| GET | `/dns/mis-registros` | `[Authorize]` |
+| DELETE | `/dns/{id}` | `[Authorize]` |
+
+### DNS administración (`AdminDnsController`, `/admin/dns`)
+
+| Método | Ruta | Auth |
+|---|---|---|
+| GET | `/admin/dns` | `[Authorize(Roles = "Admin")]` |
+| DELETE | `/admin/dns/{id}` | `[Authorize(Roles = "Admin")]` |
+
+### N8N — autoservicio de workspace (`N8nController`, `/n8n`)
+
+| Método | Ruta | Auth |
+|---|---|---|
+| POST | `/n8n/crear` | `[Authorize]` |
+| GET | `/n8n/mi-workspace` | `[Authorize]` |
+| DELETE | `/n8n/mi-workspace` | `[Authorize]` |
+
+### Sesiones — historial de acceso (`SesionesController`, `/sesiones`)
+
+| Método | Ruta | Auth |
+|---|---|---|
+| GET | `/sesiones` | `[Authorize]` |
 
 ## Módulo 2 — Aprovisionamiento real y gestión de la clave de cifrado
 

@@ -20,4 +20,11 @@ public interface IPartnersProvisioningRepository
 
     /// <summary>Invoca sp_DesactivarBaseDatosSocio (soft-delete del registro en ABA_Control).</summary>
     Task DesactivarAsync(long baseDeDatosSocioId, int celulaSociaId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Invoca sp_RotarPasswordBaseDatosSocio: genera y persiste una contraseña nueva en
+    /// ABA_Control (control BOLA + solo bases ACTIVA). Lanza SpBusinessException si la base
+    /// no existe, no pertenece a la célula, o no está activa.
+    /// </summary>
+    Task<ResetCredencialesResultDto> RotarPasswordAsync(long baseDeDatosSocioId, int celulaSociaId, CancellationToken ct = default);
 }

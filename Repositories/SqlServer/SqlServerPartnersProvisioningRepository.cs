@@ -119,4 +119,37 @@ public sealed class SqlServerPartnersProvisioningRepository : IPartnersProvision
             throw new SpBusinessException(ex.Number, ex.Message);
         }
     }
+
+    public async Task<ResetCredencialesResultDto> RotarPasswordAsync(long baseDeDatosSocioId, int celulaSociaId, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.AbrirAsync(ct);
+        await using var cmd = new SqlCommand("dbo.sp_RotarPasswordBaseDatosSocio", conn)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 30,
+        };
+        cmd.Parameters.Add("@BaseDeDatosSocioId", SqlDbType.Int).Value = (int)baseDeDatosSocioId;
+        cmd.Parameters.Add("@CelulaSociaId", SqlDbType.Int).Value = celulaSociaId;
+
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+                throw new InvalidOperationException("sp_RotarPasswordBaseDatosSocio no devolvió filas.");
+
+            return new ResetCredencialesResultDto
+            {
+                BaseDeDatosId = reader.GetInt32(reader.GetOrdinal("BaseDeDatosId")),
+                NombreBD = reader.GetString(reader.GetOrdinal("NombreBD")),
+                UsuarioBD = reader.GetString(reader.GetOrdinal("UsuarioBD")),
+                Host = reader.GetString(reader.GetOrdinal("Host")),
+                Puerto = reader.GetInt32(reader.GetOrdinal("Puerto")),
+                PasswordNueva = reader.GetString(reader.GetOrdinal("PasswordNueva")),
+            };
+        }
+        catch (SqlException ex) when (ex.Number >= 50000)
+        {
+            throw new SpBusinessException(ex.Number, ex.Message);
+        }
+    }
 }
