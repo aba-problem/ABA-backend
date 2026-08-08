@@ -162,6 +162,28 @@ public sealed class MySqlProvisioningService : IMySqlProvisioningService
         _logger.LogInformation("Base eliminada en MySQL base={Base} usuario={Usuario}", nombreBaseDatos, usuarioBaseDatos);
     }
 
+    public async Task RotarPasswordAsync(string usuarioBaseDatos, string nuevaPassword, CancellationToken ct = default)
+    {
+        ValidarIdentificador(usuarioBaseDatos, nameof(usuarioBaseDatos));
+
+        await using var conn = new MySqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using (var cmd = new MySqlCommand(
+            $"ALTER USER '{usuarioBaseDatos}'@'%' IDENTIFIED BY @password;", conn))
+        {
+            cmd.Parameters.AddWithValue("@password", nuevaPassword); // NUNCA concatenado
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+
+        // Mismo motivo que en CrearBaseDeDatosAsync: ProxySQL no delega autenticación a MySQL,
+        // así que sin sincronizar acá el usuario queda sin poder conectar con la contraseña
+        // nueva por el puerto público. RegistrarUsuarioAsync ya es upsert (REPLACE INTO).
+        await _proxySql.RegistrarUsuarioAsync(usuarioBaseDatos, nuevaPassword, ct);
+
+        _logger.LogInformation("Password rotada en MySQL usuario={Usuario}", usuarioBaseDatos);
+    }
+
     private async Task LimpiarParcialAsync(
         MySqlConnection conn, string nombreBaseDatos, string usuarioBaseDatos,
         bool creoBaseDatos, bool creoUsuario, bool registroEnProxySql, CancellationToken ct)

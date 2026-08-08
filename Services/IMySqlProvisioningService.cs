@@ -31,4 +31,11 @@ public interface IMySqlProvisioningService
     /// baja y esa célula llama DELETE explícitamente.
     /// </summary>
     Task EliminarBaseDeDatosAsync(string nombreBaseDatos, string usuarioBaseDatos, CancellationToken ct = default);
+
+    /// <summary>
+    /// Módulo 8 (reset de credenciales de células socias) — aplica una contraseña nueva al
+    /// usuario ya existente (ALTER USER, no CREATE) y la sincroniza en ProxySQL. La base y el
+    /// usuario no se tocan, solo la contraseña.
+    /// </summary>
+    Task RotarPasswordAsync(string usuarioBaseDatos, string nuevaPassword, CancellationToken ct = default);
 }

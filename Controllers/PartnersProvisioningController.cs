@@ -113,6 +113,41 @@ public sealed class PartnersProvisioningController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Genera y aplica una contraseña nueva para una base ACTIVA de la célula autenticada.
+    /// Sin body. La contraseña nueva se entrega UNA SOLA VEZ, igual que al crear.
+    /// </summary>
+    [HttpPost("{id:long}/credenciales/reset")]
+    public async Task<IActionResult> ResetCredenciales(long id, CancellationToken ct)
+    {
+        if (!TryCelulaSociaId(out var celulaSociaId))
+            return Unauthorized(new { error = "API key inválida." });
+
+        try
+        {
+            var resultado = await _orchestrator.RotarPasswordAsync(id, celulaSociaId, ct);
+
+            _logger.LogInformation("Password rotada socia celulaSociaId={CelulaSociaId} baseId={BaseId}",
+                celulaSociaId, id);
+
+            return Ok(resultado);
+        }
+        catch (SpBusinessException)
+        {
+            // No existe, no pertenece a esta célula, o no está ACTIVA (control BOLA).
+            return NotFound();
+        }
+        catch (ProvisioningEngineException ex)
+        {
+            _logger.LogError(ex, "Fallo de motor rotando password (socia) celulaSociaId={CelulaSociaId} baseId={BaseId}",
+                celulaSociaId, id);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                error = "No se pudo rotar la contraseña en este momento. Intenta de nuevo más tarde.",
+            });
+        }
+    }
+
     private bool TryCelulaSociaId(out int celulaSociaId)
     {
         var claim = User.FindFirst("celulaId")?.Value;

@@ -19,4 +19,11 @@ public interface IPartnersProvisioningOrchestrator
     /// ABA_Control) — a diferencia del "desactivar" de estudiantes.
     /// </summary>
     Task DesaprovisionarAsync(long baseDeDatosSocioId, int celulaSociaId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Genera y aplica una contraseña nueva para una base ACTIVA de la célula autenticada.
+    /// Lanza SpBusinessException (BOLA/no existe/no activa) o ProvisioningEngineException
+    /// (falló aplicar la contraseña en MySQL).
+    /// </summary>
+    Task<ResetCredencialesResultDto> RotarPasswordAsync(long baseDeDatosSocioId, int celulaSociaId, CancellationToken ct = default);
 }
