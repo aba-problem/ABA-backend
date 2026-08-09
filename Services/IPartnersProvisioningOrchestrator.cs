@@ -26,4 +26,7 @@ public interface IPartnersProvisioningOrchestrator
     /// (falló aplicar la contraseña en MySQL).
     /// </summary>
     Task<ResetCredencialesResultDto> RotarPasswordAsync(long baseDeDatosSocioId, int celulaSociaId, CancellationToken ct = default);
+
+    /// <summary>Todas las bases de la célula autenticada, cualquier Estado (incluye ELIMINADA, para auditoría propia).</summary>
+    Task<IReadOnlyList<BaseDatosSocioDto>> ListarAsync(int celulaSociaId, CancellationToken ct = default);
 }

@@ -76,6 +76,17 @@ public sealed class PartnersProvisioningController : ControllerBase
         }
     }
 
+    /// <summary>Lista todas las bases de la célula autenticada (cualquier Estado, para autoservicio de gestión).</summary>
+    [HttpGet]
+    public async Task<IActionResult> Listar(CancellationToken ct)
+    {
+        if (!TryCelulaSociaId(out var celulaSociaId))
+            return Unauthorized(new { error = "API key inválida." });
+
+        var resultado = await _orchestrator.ListarAsync(celulaSociaId, ct);
+        return Ok(resultado);
+    }
+
     /// <summary>Consulta estado y espacio usado de una base de la célula autenticada.</summary>
     [HttpGet("{id:long}")]
     public async Task<IActionResult> Obtener(long id, CancellationToken ct)

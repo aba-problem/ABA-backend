@@ -27,4 +27,7 @@ public interface IPartnersProvisioningRepository
     /// no existe, no pertenece a la célula, o no está activa.
     /// </summary>
     Task<ResetCredencialesResultDto> RotarPasswordAsync(long baseDeDatosSocioId, int celulaSociaId, CancellationToken ct = default);
+
+    /// <summary>Invoca sp_ListarBasesDatosSocio: todas las bases de la célula, cualquier Estado.</summary>
+    Task<IReadOnlyList<BaseDatosSocioDto>> ListarAsync(int celulaSociaId, CancellationToken ct = default);
 }
