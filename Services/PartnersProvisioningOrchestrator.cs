@@ -82,4 +82,7 @@ public sealed class PartnersProvisioningOrchestrator : IPartnersProvisioningOrch
 
         return resultado;
     }
+
+    public Task<IReadOnlyList<BaseDatosSocioDto>> ListarAsync(int celulaSociaId, CancellationToken ct = default)
+        => _repo.ListarAsync(celulaSociaId, ct);
 }

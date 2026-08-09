@@ -101,6 +101,7 @@ para equipos externos.
 | Método | Ruta | Auth | Rate limit |
 |---|---|---|---|
 | POST | `/partners/databases` | `AuthSchemes.PartnerApiKey` (`Authorization: Bearer <key>`) | `partners` (ráfaga 5, recarga 1/2min por célula) |
+| GET | `/partners/databases` | `AuthSchemes.PartnerApiKey` | `partners` |
 | GET | `/partners/databases/{id}` | `AuthSchemes.PartnerApiKey` | `partners` |
 | DELETE | `/partners/databases/{id}` | `AuthSchemes.PartnerApiKey` | `partners` |
 | POST | `/partners/databases/{id}/credenciales/reset` | `AuthSchemes.PartnerApiKey` | `partners` |

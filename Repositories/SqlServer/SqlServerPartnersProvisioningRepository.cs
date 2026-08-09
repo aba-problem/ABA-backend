@@ -152,4 +152,33 @@ public sealed class SqlServerPartnersProvisioningRepository : IPartnersProvision
             throw new SpBusinessException(ex.Number, ex.Message);
         }
     }
+
+    public async Task<IReadOnlyList<BaseDatosSocioDto>> ListarAsync(int celulaSociaId, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.AbrirAsync(ct);
+        await using var cmd = new SqlCommand("dbo.sp_ListarBasesDatosSocio", conn)
+        {
+            CommandType = CommandType.StoredProcedure,
+        };
+        cmd.Parameters.Add("@CelulaSociaId", SqlDbType.Int).Value = celulaSociaId;
+
+        var resultado = new List<BaseDatosSocioDto>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            resultado.Add(new BaseDatosSocioDto
+            {
+                Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                NombreBD = reader.GetString(reader.GetOrdinal("NombreBD")),
+                UsuarioBD = reader.GetString(reader.GetOrdinal("UsuarioBD")),
+                Host = reader.GetString(reader.GetOrdinal("Host")),
+                Puerto = reader.GetInt32(reader.GetOrdinal("Puerto")),
+                Estado = reader.GetString(reader.GetOrdinal("Estado")),
+                EspacioMaximoMB = reader.GetInt16(reader.GetOrdinal("EspacioMaximoMB")),
+                EspacioUtilizadoMB = reader.GetDecimal(reader.GetOrdinal("EspacioUtilizadoMB")),
+                FechaCreacion = reader.GetDateTime(reader.GetOrdinal("FechaCreacion")),
+            });
+        }
+        return resultado;
+    }
 }
