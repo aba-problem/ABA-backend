@@ -8,6 +8,12 @@
 # cada merge a main que deba llegar a producción.
 #
 # Uso: ENV_FILE=/opt/aba-cluster/.env ./redeploy-backend.sh
+#
+# Este archivo vive suelto en la VPS (/home/admin/redeploy-backend.sh), no como un
+# git clone del repo — un "git push" a este repo NO actualiza esa copia solo. Después
+# de cualquier cambio acá, sincronizarlo a mano antes de volver a correrlo:
+#   scp infra/redeploy-backend.sh admin@178.105.217.45:/home/admin/redeploy-backend.sh
+# Detalle completo: README.md § "Redeploy manual a producción".
 
 set -euo pipefail
 
@@ -15,6 +21,7 @@ ENV_FILE="${ENV_FILE:-/opt/aba-cluster/.env}"
 IMAGE="ghcr.io/aba-problem/aba-backend:latest"
 CONTAINER="aba-backend"
 NETWORK="aba-backend_default"
+KEYS_DIR="${KEYS_DIR:-/opt/aba-cluster/keys}"
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "ERROR: no existe $ENV_FILE" >&2
@@ -28,6 +35,19 @@ echo "==> Deteniendo y eliminando el contenedor anterior (si existe)..."
 docker stop "$CONTAINER" 2>/dev/null || true
 docker rm "$CONTAINER" 2>/dev/null || true
 
+# Program.cs configura AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo("/keys"))
+# para que el key ring (usado para cifrar el token antiforgery/CSRF) sobreviva un redeploy en
+# vez de regenerarse en memoria cada vez. El proceso corre como usuario no-root (uid 1654) dentro
+# del contenedor, así que la carpeta del host tiene que existir y ser de ese dueño ANTES de montarla
+# — si no, el contenedor arranca pero /auth/csrf y /auth/refresh fallan con
+# "UnauthorizedAccessException: Access to the path '/keys' is denied." (visto en producción el
+# 2026-08-09, ver Aba/BITACORA-ALTA-RAFT-2026-08-09.md). docker-compose.yml (solo dev local) ya
+# resuelve esto con un volumen + init container; acá se hace a mano porque este script es lo único
+# que despliega el contenedor real.
+echo "==> Preparando volumen de Data Protection Keys ($KEYS_DIR)..."
+sudo mkdir -p "$KEYS_DIR"
+sudo chown -R 1654:1654 "$KEYS_DIR"
+
 echo "==> Levantando el contenedor nuevo..."
 docker run -d \
   --name "$CONTAINER" \
@@ -35,6 +55,7 @@ docker run -d \
   --network "$NETWORK" \
   -p 127.0.0.1:5000:8080 \
   -m 500m \
+  -v "$KEYS_DIR:/keys" \
   --env-file "$ENV_FILE" \
   -e DOTNET_COUNTER_MetricsEnabled=false \
   -e DOTNET_GCServer=false \
