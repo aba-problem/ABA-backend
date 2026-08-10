@@ -217,6 +217,37 @@ sysctl net.ipv4.tcp_syncookies net.ipv4.tcp_max_syn_backlog net.core.somaxconn n
 
 Debe imprimir exactamente los valores de `infra/sysctl.conf`, no los defaults del kernel.
 
+## Redeploy manual a producción (`infra/redeploy-backend.sh`)
+
+El CD (`cd.yml`) solo actualiza el servicio Swarm, que no sirve tráfico real —
+`aba-backend` (el contenedor manual al que apunta Nginx Proxy Manager) hay que
+redesplegarlo a mano después de cada merge a `main` que deba llegar a producción
+(ver `Aba/INFRAESTRUCTURA.md` § 7.5 para el porqué de esta desconexión).
+
+**El script vive suelto en la VPS** (`/home/admin/redeploy-backend.sh`), no como un
+`git clone` del repo — así que un `git push` a este repo **no lo actualiza solo**.
+Cada vez que se modifique `infra/redeploy-backend.sh`, hay que sincronizarlo a mano
+antes de volver a correrlo:
+
+```bash
+# Desde tu máquina, con el repo actualizado:
+scp infra/redeploy-backend.sh admin@178.105.217.45:/home/admin/redeploy-backend.sh
+```
+
+Después, conectado por SSH a la VPS:
+
+```bash
+chmod +x /home/admin/redeploy-backend.sh   # solo hace falta si scp no preservó el permiso
+ENV_FILE=/opt/aba-cluster/.env /home/admin/redeploy-backend.sh
+```
+
+El script hace `docker pull` de la imagen más reciente de GHCR, para/elimina el
+contenedor anterior, lo vuelve a levantar (incluido el volumen de
+`/opt/aba-cluster/keys:/keys` que usa `AddDataProtection().PersistKeysToFileSystem`
+para el cifrado de tokens CSRF — ver `Program.cs`), y termina verificando
+`GET /stats` contra `https://api.aba.andrescortes.dev` para confirmar que el
+contenedor nuevo realmente responde antes de darlo por terminado.
+
 ## Módulo 7 — Control de repositorio
 
 ### 7.1 — Protección de la rama `main`
