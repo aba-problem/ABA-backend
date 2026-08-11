@@ -11,5 +11,6 @@ public sealed record BaseDatosSocioDto
     public required string Estado { get; init; }
     public required int EspacioMaximoMB { get; init; }
     public required decimal EspacioUtilizadoMB { get; init; }
+    public required int PorcentajeUsado { get; init; }
     public required DateTime FechaCreacion { get; init; }
 }

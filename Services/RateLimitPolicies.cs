@@ -63,10 +63,12 @@ public static class RateLimitPolicies
                 });
             });
 
-            // Módulo 8 — política "partners" por célula socia: Token Bucket, ráfaga de 5 y
-            // recarga de 1 cada 2 min. Valor propuesto (no había límite definido en la
-            // investigación original, ver Aba/INVESTIGACION-PROXY-MYSQL.md § 12) — ajustar
-            // según el volumen real que generen las 11 células una vez en uso.
+            // Módulo 8 — política "partners" por célula socia: Token Bucket, ráfaga de 10 y
+            // recarga de 1 cada 2 min. Subido de 5 a 10 (2026-08-10) al agregar el chequeo de
+            // cuota de espacio (sql/017_espacio_socio.sql): con ráfaga 5, una célula que
+            // consultaba espacio antes de escribir se quedaba sin cupo para crear/listar/
+            // eliminar bases. Ajustar de nuevo según el volumen real que generen las 11
+            // células una vez en uso.
             options.AddPolicy("partners", context =>
             {
                 var celulaId = context.User.FindFirst("celulaId")?.Value
@@ -74,7 +76,7 @@ public static class RateLimitPolicies
                     ?? "anon";
                 return RateLimitPartition.GetTokenBucketLimiter(celulaId, _ => new TokenBucketRateLimiterOptions
                 {
-                    TokenLimit = 5,
+                    TokenLimit = 10,
                     TokensPerPeriod = 1,
                     ReplenishmentPeriod = TimeSpan.FromMinutes(2),
                     QueueLimit = 0,
