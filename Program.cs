@@ -268,6 +268,7 @@ builder.Services.AddScoped<ILandingRepository, SqlServerLandingRepository>();
 builder.Services.AddScoped<ICelulaSociaRepository, SqlServerCelulaSociaRepository>();
 builder.Services.AddScoped<IPartnersProvisioningRepository, SqlServerPartnersProvisioningRepository>();
 builder.Services.AddScoped<IPartnersProvisioningOrchestrator, PartnersProvisioningOrchestrator>();
+builder.Services.AddScoped<ICelulasSociasAdminRepository, SqlServerCelulasSociasAdminRepository>();
 
 // Aprovisionamiento real contra el motor elegido (MySQL externo — fuera del presupuesto
 // de RAM del Módulo 6 — o SQLServer en la MISMA instancia que ABA_Control, protegida por
