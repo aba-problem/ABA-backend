@@ -27,7 +27,11 @@ public sealed class CloudflareDnsProviderService : IDnsProviderService
         _http = http;
         _zoneId = config["Dns:CloudflareZoneId"]
             ?? throw new InvalidOperationException("Dns:CloudflareZoneId no configurada.");
-        _dominioBase = config["Dns:DominioBase"] ?? "andrescortes.dev";
+        // Los subdominios de autoservicio cuelgan de aba.andrescortes.dev (no de la raíz
+        // andrescortes.dev) para que no puedan colisionar con nada fuera de la plataforma
+        // ABA. El Zone ID sigue siendo el de la zona raíz — Cloudflare no trata los
+        // subdominios como zonas separadas salvo que se configure explícitamente así.
+        _dominioBase = config["Dns:DominioBase"] ?? "aba.andrescortes.dev";
         _logger = logger;
     }
 
