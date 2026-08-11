@@ -159,17 +159,26 @@ public static class RateLimitPolicies
             });
 
             // Red de seguridad global (Módulo 5.1) — se encadenan DOS defensas para toda request:
-            //   1) Fixed Window por IP: red general de tráfico (60 req/min).
+            //   1) Fixed Window por IP: red general de tráfico.
             //   2) Concurrency Limiter GLOBAL (una sola partición, no por IP): máximo de peticiones
-            //      procesándose simultáneamente (20) — defensa MÁS DIRECTA contra saturación de
+            //      procesándose simultáneamente — defensa MÁS DIRECTA contra saturación de
             //      threads/memoria del backend en la VPS de 4GB ante un pico de tráfico.
             // CreateChained exige que AMBOS limiters permitan la request; si cualquiera rechaza, 429.
+            //
+            // 2026-08-11: subidos los umbrales — con 60/min + 20 concurrentes SIN cola (QueueLimit=0,
+            // rechazo inmediato), un solo usuario creando una BD (que tarda varios segundos en el
+            // aprovisionamiento de dos fases) y probando otro módulo (N8N/DNS/ApiKeys) en la misma
+            // ventana ya alcanzaba el techo GLOBAL — aunque cada política por-feature
+            // (provisioning/n8n-crear/apikeys-crear/dns-crear) es independiente y NUNCA comparte
+            // balde entre sí, esta red global sí es compartida por toda la sesión y estaba
+            // bloqueando "crear otro servicio" sin que fuera abuso real. Se sube el techo y se le
+            // da una cola corta (en vez de rechazo instantáneo) para absorber ráfagas legítimas.
             var fixedWindowPorIp = PartitionedRateLimiter.Create<HttpContext, string>(context =>
             {
                 var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
                 return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
                 {
-                    PermitLimit = 60,
+                    PermitLimit = 180,
                     Window = TimeSpan.FromMinutes(1),
                     QueueLimit = 0,
                 });
@@ -177,9 +186,9 @@ public static class RateLimitPolicies
             var concurrencyGlobal = PartitionedRateLimiter.Create<HttpContext, string>(_ =>
                 RateLimitPartition.GetConcurrencyLimiter("global", _ => new ConcurrencyLimiterOptions
                 {
-                    PermitLimit = 20,
+                    PermitLimit = 60,
                     QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = 0,
+                    QueueLimit = 15, // absorbe ráfagas cortas en vez de rechazar la request 61 al instante
                 }));
             options.GlobalLimiter = PartitionedRateLimiter.CreateChained(fixedWindowPorIp, concurrencyGlobal);
 
