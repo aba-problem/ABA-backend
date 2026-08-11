@@ -96,6 +96,7 @@ public sealed class SqlServerPartnersProvisioningRepository : IPartnersProvision
             Estado = reader.GetString(reader.GetOrdinal("Estado")),
             EspacioMaximoMB = reader.GetInt16(reader.GetOrdinal("EspacioMaximoMB")),
             EspacioUtilizadoMB = reader.GetDecimal(reader.GetOrdinal("EspacioUtilizadoMB")),
+            PorcentajeUsado = reader.GetInt32(reader.GetOrdinal("PorcentajeUsado")),
             FechaCreacion = reader.GetDateTime(reader.GetOrdinal("FechaCreacion")),
         };
     }
@@ -176,9 +177,49 @@ public sealed class SqlServerPartnersProvisioningRepository : IPartnersProvision
                 Estado = reader.GetString(reader.GetOrdinal("Estado")),
                 EspacioMaximoMB = reader.GetInt16(reader.GetOrdinal("EspacioMaximoMB")),
                 EspacioUtilizadoMB = reader.GetDecimal(reader.GetOrdinal("EspacioUtilizadoMB")),
+                PorcentajeUsado = reader.GetInt32(reader.GetOrdinal("PorcentajeUsado")),
                 FechaCreacion = reader.GetDateTime(reader.GetOrdinal("FechaCreacion")),
             });
         }
         return resultado;
+    }
+
+    public async Task<IReadOnlyList<BaseParaOperarSocioDto>> ListarActivasMySqlAsync(CancellationToken ct = default)
+    {
+        await using var conn = await _factory.AbrirAsync(ct);
+        await using var cmd = new SqlCommand("dbo.sp_ListarBasesActivasMySqlSocio", conn)
+        {
+            CommandType = CommandType.StoredProcedure,
+        };
+
+        var resultado = new List<BaseParaOperarSocioDto>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            resultado.Add(new BaseParaOperarSocioDto
+            {
+                Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                CelulaSociaId = reader.GetInt32(reader.GetOrdinal("CelulaSociaId")),
+                NombreBD = reader.GetString(reader.GetOrdinal("NombreBD")),
+                UsuarioBD = reader.GetString(reader.GetOrdinal("UsuarioBD")),
+                EspacioMaximoMB = reader.GetInt16(reader.GetOrdinal("EspacioMaximoMB")),
+                EspacioUtilizadoMB = reader.GetDecimal(reader.GetOrdinal("EspacioUtilizadoMB")),
+                Estado = reader.GetString(reader.GetOrdinal("Estado")),
+            });
+        }
+        return resultado;
+    }
+
+    public async Task ActualizarEspacioUsadoAsync(long baseDeDatosSocioId, decimal espacioUtilizadoMB, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.AbrirAsync(ct);
+        await using var cmd = new SqlCommand("dbo.sp_ActualizarEspacioUsadoSocio", conn)
+        {
+            CommandType = CommandType.StoredProcedure,
+        };
+        cmd.Parameters.Add("@BaseDeDatosSocioId", SqlDbType.Int).Value = (int)baseDeDatosSocioId;
+        cmd.Parameters.Add("@EspacioUtilizadoMB", SqlDbType.Decimal, 10).Value = espacioUtilizadoMB;
+
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 }

@@ -30,4 +30,10 @@ public interface IPartnersProvisioningRepository
 
     /// <summary>Invoca sp_ListarBasesDatosSocio: todas las bases de la célula, cualquier Estado.</summary>
     Task<IReadOnlyList<BaseDatosSocioDto>> ListarAsync(int celulaSociaId, CancellationToken ct = default);
+
+    /// <summary>Invoca sp_ListarBasesActivasMySqlSocio — candidatas al job de enforcement de cuota.</summary>
+    Task<IReadOnlyList<BaseParaOperarSocioDto>> ListarActivasMySqlAsync(CancellationToken ct = default);
+
+    /// <summary>Invoca sp_ActualizarEspacioUsadoSocio — refleja el uso real medido en el motor y aplica la cuota.</summary>
+    Task ActualizarEspacioUsadoAsync(long baseDeDatosSocioId, decimal espacioUtilizadoMB, CancellationToken ct = default);
 }
