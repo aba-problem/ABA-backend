@@ -12,6 +12,8 @@ public interface IUsuarioRepository
     /// <summary>
     /// Invoca sp_CrearUsuario (upsert dentro del SP, nunca en el backend).
     /// Si (Proveedor, ProveedorUsuarioId) ya existe, reutiliza el registro y actualiza último login.
+    /// <paramref name="userAgent"/> es puramente informativo — se guarda en el detalle del
+    /// evento LOGIN de Auditoria para mostrarlo en Registros de sesión, ninguna regla depende de él.
     /// </summary>
-    Task<UsuarioDto> ObtenerOCrearAsync(ExternalLoginInfo info, string? ipOrigen, CancellationToken ct = default);
+    Task<UsuarioDto> ObtenerOCrearAsync(ExternalLoginInfo info, string? ipOrigen, string? userAgent, CancellationToken ct = default);
 }

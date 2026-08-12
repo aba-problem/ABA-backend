@@ -16,7 +16,7 @@ public sealed class SqlServerUsuarioRepository : IUsuarioRepository
 
     public SqlServerUsuarioRepository(ISqlConnectionFactory factory) => _factory = factory;
 
-    public async Task<UsuarioDto> ObtenerOCrearAsync(ExternalLoginInfo info, string? ipOrigen, CancellationToken ct = default)
+    public async Task<UsuarioDto> ObtenerOCrearAsync(ExternalLoginInfo info, string? ipOrigen, string? userAgent, CancellationToken ct = default)
     {
         await using var conn = await _factory.AbrirAsync(ct);
         await using var cmd = new SqlCommand("dbo.sp_CrearUsuario", conn)
@@ -31,6 +31,9 @@ public sealed class SqlServerUsuarioRepository : IUsuarioRepository
         cmd.Parameters.Add("@Proveedor", SqlDbType.VarChar, 20).Value = info.Proveedor;
         cmd.Parameters.Add("@ProveedorUsuarioId", SqlDbType.VarChar, 100).Value = info.ProveedorUsuarioId;
         cmd.Parameters.Add("@IpOrigen", SqlDbType.VarChar, 45).Value = (object?)ipOrigen ?? DBNull.Value;
+        // Recortado a 500 — algunos UA (bots raros) exceden eso; nunca debe romper el login por esto.
+        cmd.Parameters.Add("@UserAgent", SqlDbType.NVarChar, 500).Value =
+            (object?)(userAgent is { Length: > 500 } ? userAgent[..500] : userAgent) ?? DBNull.Value;
 
         try
         {

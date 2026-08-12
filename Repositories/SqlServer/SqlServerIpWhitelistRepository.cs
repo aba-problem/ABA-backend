@@ -11,7 +11,7 @@ public sealed class SqlServerIpWhitelistRepository : IIpWhitelistRepository
 
     public SqlServerIpWhitelistRepository(ISqlConnectionFactory factory) => _factory = factory;
 
-    public async Task<IpRegistroDto> RegistrarAsync(long usuarioId, string direccionIp, string paisIso, CancellationToken ct = default)
+    public async Task<IpRegistroDto> RegistrarAsync(long usuarioId, string direccionIp, string paisIso, string? ciudad, CancellationToken ct = default)
     {
         await using var conn = await _factory.AbrirAsync(ct);
         await using var cmd = new SqlCommand("dbo.sp_RegistrarIpUsuario", conn)
@@ -21,6 +21,7 @@ public sealed class SqlServerIpWhitelistRepository : IIpWhitelistRepository
         cmd.Parameters.Add("@UsuarioId", SqlDbType.Int).Value = (int)usuarioId;
         cmd.Parameters.Add("@DireccionIp", SqlDbType.VarChar, 45).Value = direccionIp;
         cmd.Parameters.Add("@PaisIso", SqlDbType.Char, 2).Value = paisIso;
+        cmd.Parameters.Add("@Ciudad", SqlDbType.NVarChar, 100).Value = (object?)ciudad ?? DBNull.Value;
 
         try
         {
@@ -76,5 +77,32 @@ public sealed class SqlServerIpWhitelistRepository : IIpWhitelistRepository
         while (await reader.ReadAsync(ct))
             resultado.Add(reader.GetString(0));
         return resultado;
+    }
+
+    public async Task<bool> RevocarIpAsync(long usuarioId, string direccionIp, string? ipOrigenSolicitud, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.AbrirAsync(ct);
+        await using var cmd = new SqlCommand("dbo.sp_RevocarIpUsuario", conn)
+        {
+            CommandType = CommandType.StoredProcedure,
+        };
+        cmd.Parameters.Add("@UsuarioId", SqlDbType.Int).Value = (int)usuarioId;
+        cmd.Parameters.Add("@DireccionIp", SqlDbType.VarChar, 45).Value = direccionIp;
+        cmd.Parameters.Add("@IpOrigenSolicitud", SqlDbType.VarChar, 45).Value = (object?)ipOrigenSolicitud ?? DBNull.Value;
+
+        try
+        {
+            var filas = await cmd.ExecuteNonQueryAsync(ct);
+            return filas > 0;
+        }
+        catch (SqlException ex) when (ex.Number is 50011)
+        {
+            // Control 3.1 (BOLA): no existe o no está activa para este usuario → 404, nunca 403.
+            return false;
+        }
+        catch (SqlException ex) when (ex.Number >= 50000)
+        {
+            throw new SpBusinessException(ex.Number, ex.Message);
+        }
     }
 }

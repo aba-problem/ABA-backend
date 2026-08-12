@@ -58,6 +58,40 @@ public sealed class GeoIpService : IGeoIpService
         }
     }
 
+    public async Task<GeoUbicacion?> ResolverUbicacionAsync(string direccionIp, CancellationToken ct = default)
+    {
+        if (!IPAddress.TryParse(direccionIp, out var ip) || EsPrivadaOLoopback(ip))
+            return null;
+
+        try
+        {
+            using var respuesta = await _http.GetAsync(
+                $"http://ip-api.com/json/{Uri.EscapeDataString(direccionIp)}?fields=status,countryCode,city", ct);
+
+            if (!respuesta.IsSuccessStatusCode)
+                return null;
+
+            await using var stream = await respuesta.Content.ReadAsStreamAsync(ct);
+            using var json = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+
+            var estado = json.RootElement.TryGetProperty("status", out var s) ? s.GetString() : null;
+            if (estado != "success")
+                return null;
+
+            var paisIso = json.RootElement.TryGetProperty("countryCode", out var c) ? c.GetString() : null;
+            if (string.IsNullOrWhiteSpace(paisIso))
+                return null;
+
+            var ciudad = json.RootElement.TryGetProperty("city", out var ciu) ? ciu.GetString() : null;
+            return new GeoUbicacion(paisIso, string.IsNullOrWhiteSpace(ciudad) ? null : ciudad);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "No se pudo resolver la ubicación para la IP {Ip}", direccionIp);
+            return null;
+        }
+    }
+
     private static bool EsPrivadaOLoopback(IPAddress ip)
     {
         if (IPAddress.IsLoopback(ip)) return true;

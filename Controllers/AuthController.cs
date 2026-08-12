@@ -151,7 +151,9 @@ public sealed class AuthController : ControllerBase
         try
         {
             // Upsert dentro del SP (nunca en el backend) — sp_CrearUsuario (ABA_Control).
-            usuario = await _usuarios.ObtenerOCrearAsync(info, ip, ct);
+            // User-Agent es puramente informativo (se muestra en Registros de sesión).
+            var userAgent = Request.Headers.UserAgent.ToString();
+            usuario = await _usuarios.ObtenerOCrearAsync(info, ip, string.IsNullOrWhiteSpace(userAgent) ? null : userAgent, ct);
         }
         catch (SpBusinessException ex)
         {
@@ -180,14 +182,14 @@ public sealed class AuthController : ControllerBase
     {
         try
         {
-            var paisIso = await _geoIp.ResolverPaisIsoAsync(ip, ct);
-            if (paisIso is null)
+            var ubicacion = await _geoIp.ResolverUbicacionAsync(ip, ct);
+            if (ubicacion is null)
             {
                 _logger.LogWarning("No se pudo resolver país para ip={Ip} usuarioId={UsuarioId}; whitelist omitida", ip, usuarioId);
                 return;
             }
 
-            await _ipWhitelist.RegistrarAsync(usuarioId, ip, paisIso, ct);
+            await _ipWhitelist.RegistrarAsync(usuarioId, ip, ubicacion.PaisIso, ubicacion.Ciudad, ct);
             await _mysqlWhitelistSync.SincronizarAsync(usuarioId, ct);
         }
         catch (SpBusinessException ex)
