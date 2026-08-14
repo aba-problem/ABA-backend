@@ -194,6 +194,44 @@ public sealed class DashboardController : ControllerBase
         return Ok(perfil);
     }
 
+    /// <summary>
+    /// Actualiza nombre/avatar del usuario autenticado. No pisa lo que venga de
+    /// Google/GitHub — persiste en columnas separadas que sp_CrearUsuario nunca toca,
+    /// así el cambio sobrevive al próximo login (ver sql/023_perfil_personalizado.sql).
+    /// Control 1.2: endpoint mutante con cookies → exige CSRF token.
+    /// </summary>
+    [HttpPut("perfil")]
+    public async Task<IActionResult> ActualizarPerfil([FromBody] ActualizarPerfilRequest request, CancellationToken ct)
+    {
+        await _antiforgery.ValidateRequestAsync(HttpContext);
+
+        if (request.PropiedadesDesconocidas is { Count: > 0 })
+            return BadRequest(new { error = "El cuerpo contiene campos no permitidos." });
+
+        if (!TryUsuarioId(out var usuarioId))
+            return Unauthorized();
+
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+
+        try
+        {
+            var perfil = await _repo.ActualizarPerfilAsync(usuarioId, request.Nombre, request.AvatarUrl, ip, ct);
+            _logger.LogInformation("Perfil actualizado usuarioId={UsuarioId}", usuarioId);
+            return Ok(perfil);
+        }
+        catch (SpBusinessException ex) when (ex.SpErrorNumber is 50040 or 50041)
+        {
+            return BadRequest(new { error = MensajeValidacionPerfil(ex.SpErrorNumber) });
+        }
+    }
+
+    private static string MensajeValidacionPerfil(int spErrorNumber) => spErrorNumber switch
+    {
+        50040 => "El nombre no puede estar vacío.",
+        50041 => "La URL del avatar debe empezar con http:// o https://.",
+        _ => "No se pudo actualizar el perfil.",
+    };
+
     private bool TryUsuarioId(out long usuarioId)
     {
         var sub = User.FindFirstValue(JwtRegisteredClaimNames.Sub)

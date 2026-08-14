@@ -35,4 +35,12 @@ public interface IDashboardRepository
     /// Invoca sp_ObtenerPerfilUsuario — retorna el perfil del usuario autenticado.
     /// </summary>
     Task<UsuarioDto?> ObtenerPerfilAsync(long usuarioId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Invoca sp_ActualizarPerfilUsuario — persiste nombre/avatar personalizados
+    /// (nunca se pierden en el próximo login: sp_CrearUsuario no toca estas columnas,
+    /// solo las de OAuth crudo). Lanza SpBusinessException si el nombre queda vacío
+    /// tras recortar espacios (50040) o la URL de avatar no es http(s) (50041).
+    /// </summary>
+    Task<UsuarioDto> ActualizarPerfilAsync(long usuarioId, string nombre, string? avatarUrl, string? ipOrigen, CancellationToken ct = default);
 }

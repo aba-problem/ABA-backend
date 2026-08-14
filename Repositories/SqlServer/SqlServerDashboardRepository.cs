@@ -198,4 +198,44 @@ public sealed class SqlServerDashboardRepository : IDashboardRepository
             EsAdmin = reader.GetBoolean(reader.GetOrdinal("EsAdmin")),
         };
     }
+
+    public async Task<UsuarioDto> ActualizarPerfilAsync(long usuarioId, string nombre, string? avatarUrl, string? ipOrigen, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.AbrirAsync(ct);
+        await using var cmd = new SqlCommand("dbo.sp_ActualizarPerfilUsuario", conn)
+        {
+            CommandType = CommandType.StoredProcedure,
+        };
+        cmd.Parameters.Add("@UsuarioId", SqlDbType.Int).Value = (int)usuarioId;
+        cmd.Parameters.Add("@Nombre", SqlDbType.NVarChar, 150).Value = nombre;
+        cmd.Parameters.Add("@AvatarUrl", SqlDbType.NVarChar, 500).Value = (object?)avatarUrl ?? DBNull.Value;
+        cmd.Parameters.Add("@IpOrigen", SqlDbType.VarChar, 45).Value = (object?)ipOrigen ?? DBNull.Value;
+
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+                throw new InvalidOperationException("sp_ActualizarPerfilUsuario no devolvió filas.");
+
+            return new UsuarioDto
+            {
+                UsuarioId = reader.GetInt32(reader.GetOrdinal("UsuarioId")),
+                Nombre = reader.GetString(reader.GetOrdinal("Nombre")),
+                Correo = reader.GetString(reader.GetOrdinal("Correo")),
+                AvatarUrl = reader.IsDBNull(reader.GetOrdinal("AvatarUrl"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("AvatarUrl")),
+                Proveedor = reader.GetString(reader.GetOrdinal("Proveedor")),
+                FechaCreacion = reader.GetDateTime(reader.GetOrdinal("FechaCreacion")),
+                UltimoLogin = reader.IsDBNull(reader.GetOrdinal("UltimoLogin"))
+                    ? null
+                    : reader.GetDateTime(reader.GetOrdinal("UltimoLogin")),
+                EsAdmin = reader.GetBoolean(reader.GetOrdinal("EsAdmin")),
+            };
+        }
+        catch (SqlException ex) when (ex.Number >= 50000)
+        {
+            throw new SpBusinessException(ex.Number, ex.Message);
+        }
+    }
 }
