@@ -88,6 +88,9 @@ MapEnv("Dns:CloudflareZoneId", "CLOUDFLARE_ZONE_ID");
 MapEnv("Dns:DominioBase", "DNS_DOMINIO_BASE");
 MapEnv("PolyService:ApiKey", "POLYSERVICE_AI_KEY");
 MapEnv("Mongo:AdminApiKey", "MONGO_ADMIN_API_KEY");
+// Motor 'SQLServer' migrado a la instancia de una célula socia externa (mismo espíritu
+// que MySql:AdminConnectionString) — ver comentario de cabecera de ISqlServerProvisioningService.cs.
+MapEnv("SqlServerExterno:AdminConnectionString", "SQLSERVER_EXTERNO_ADMIN_CONNECTION_STRING");
 builder.Configuration.AddInMemoryCollection(mapaEnv);
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -6,10 +6,17 @@ using Microsoft.Data.SqlClient;
 namespace abaproblem.Services;
 
 /// <summary>
-/// Ejecuta el DDL real para el motor 'SQLServer'. Límite de confianza NUEVO (mismo
-/// principio que MySqlProvisioningService): aunque sp_AprovisionarBaseDatos ya generó
-/// NombreBD/UsuarioBD con un patrón fijo, esta clase los re-valida antes de construir
-/// cualquier sentencia — nunca confía en que el valor que recibe sea seguro.
+/// Ejecuta el DDL real para el motor 'SQLServer'.
+///
+/// En transición hacia la instancia EXTERNA de una célula socia (SqlServerExterno:AdminConnectionString,
+/// ver comentario de cabecera de ISqlServerProvisioningService.cs) — mientras esa variable no esté
+/// configurada, sigue usando la instancia propia (ISqlConnectionFactory, la misma que ABA_Control) tal
+/// como funciona hoy en producción. El día que se configure la variable, el switch es automático, sin
+/// tocar código ni redeployar: alcanza con poner el valor real en el .env de la VPS.
+///
+/// Límite de confianza NUEVO (mismo principio que MySqlProvisioningService): aunque
+/// sp_AprovisionarBaseDatos ya generó NombreBD/UsuarioBD con un patrón fijo, esta clase los
+/// re-valida antes de construir cualquier sentencia — nunca confía en que el valor que recibe sea seguro.
 ///
 /// CREATE LOGIN no acepta una variable en la cláusula WITH PASSWORD (limitación de
 /// T-SQL) — se usa el mismo patrón que sql/004_logon_trigger_sqlserver.sql: dynamic SQL
@@ -20,13 +27,39 @@ public sealed class SqlServerProvisioningService : ISqlServerProvisioningService
     private static readonly Regex IdentificadorBaseDatos = new("^[a-zA-Z0-9_]{1,63}$", RegexOptions.Compiled);
     private static readonly Regex IdentificadorLogin = new("^[a-zA-Z0-9_]{1,32}$", RegexOptions.Compiled);
 
-    private readonly ISqlConnectionFactory _factory;
+    private readonly string? _connectionStringExterno;
+    private readonly ISqlConnectionFactory _factoryPropio;
     private readonly ILogger<SqlServerProvisioningService> _logger;
 
-    public SqlServerProvisioningService(ISqlConnectionFactory factory, ILogger<SqlServerProvisioningService> logger)
+    public SqlServerProvisioningService(
+        IConfiguration config, ISqlConnectionFactory factoryPropio, ILogger<SqlServerProvisioningService> logger)
     {
-        _factory = factory;
+        _connectionStringExterno = config["SqlServerExterno:AdminConnectionString"];
+        _factoryPropio = factoryPropio;
         _logger = logger;
+    }
+
+    private async Task<SqlConnection> AbrirAsync(string? catalogoDistinto, CancellationToken ct)
+    {
+        // Todavía no migrado: mismo comportamiento que siempre tuvo este servicio (instancia
+        // propia, la de ABA_Control). ISqlConnectionFactory ya garantiza Max Pool Size, etc.
+        if (string.IsNullOrWhiteSpace(_connectionStringExterno))
+        {
+            return catalogoDistinto is not null
+                ? await _factoryPropio.AbrirAsync(catalogoDistinto, ct)
+                : await _factoryPropio.AbrirAsync(ct);
+        }
+
+        // Migrado: instancia externa de la célula socia.
+        var cs = catalogoDistinto is not null
+            // SqlConnectionStringBuilder (API estructurada, no concatenación) para cambiar de
+            // catálogo sin arriesgar el resto de la cadena.
+            ? new SqlConnectionStringBuilder(_connectionStringExterno) { InitialCatalog = catalogoDistinto }.ConnectionString
+            : _connectionStringExterno;
+
+        var conn = new SqlConnection(cs);
+        await conn.OpenAsync(ct);
+        return conn;
     }
 
     public async Task CrearBaseDeDatosAsync(string nombreBD, string usuarioBD, string password, CancellationToken ct = default)
@@ -34,7 +67,7 @@ public sealed class SqlServerProvisioningService : ISqlServerProvisioningService
         Validar(nombreBD, IdentificadorBaseDatos, nameof(nombreBD));
         Validar(usuarioBD, IdentificadorLogin, nameof(usuarioBD));
 
-        await using var conn = await _factory.AbrirAsync(ct); // conexión de servidor (catálogo ABA_Control)
+        await using var conn = await AbrirAsync(null, ct); // conexión de servidor (propia o externa, ver AbrirAsync)
 
         var creoLogin = false;
         var creoBaseDatos = false;
@@ -61,7 +94,7 @@ public sealed class SqlServerProvisioningService : ISqlServerProvisioningService
 
             // Conexión SEPARADA con Initial Catalog = la BD nueva (nunca "USE" sobre la
             // conexión compartida — dejaría el contexto sucio para quien reutilice el pool).
-            await using (var connBd = await _factory.AbrirAsync(nombreBD, ct))
+            await using (var connBd = await AbrirAsync(nombreBD, ct))
             await using (var cmd = new SqlCommand(
                 "DECLARE @sql NVARCHAR(MAX) = " +
                 "N'CREATE USER ' + QUOTENAME(@UsuarioBD) + N' FOR LOGIN ' + QUOTENAME(@UsuarioBD) + N'; ' + " +
