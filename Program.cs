@@ -86,6 +86,8 @@ MapEnv("Captcha:TurnstileSecretKey", "TURNSTILE_SECRET_KEY");
 MapEnv("Dns:CloudflareApiToken", "CLOUDFLARE_API_TOKEN");
 MapEnv("Dns:CloudflareZoneId", "CLOUDFLARE_ZONE_ID");
 MapEnv("Dns:DominioBase", "DNS_DOMINIO_BASE");
+MapEnv("PolyService:ApiKey", "POLYSERVICE_AI_KEY");
+MapEnv("Mongo:AdminApiKey", "MONGO_ADMIN_API_KEY");
 builder.Configuration.AddInMemoryCollection(mapaEnv);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -311,6 +313,32 @@ builder.Services.AddHttpClient<IDnsProviderService, CloudflareDnsProviderService
     var cloudflareToken = builder.Configuration["Dns:CloudflareApiToken"];
     if (!string.IsNullOrWhiteSpace(cloudflareToken))
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", cloudflareToken);
+});
+
+// PolyService IA — proveedor externo de completions. Timeout deliberadamente MÁS largo
+// que GeoIp/Captcha/Cloudflare (5s): una respuesta de completions tarda más que una
+// consulta de geolocalización o un lookup DNS. La API key es un secreto de
+// infraestructura del backend (una sola key para TODO ABA, nunca por usuario) — si no
+// está configurada, fallamos rápido en vez de dejar que cada request llegue a
+// PolyService sin Authorization y reciba 401.
+builder.Services.AddHttpClient<IPolyServiceAiClient, PolyServiceAiClient>(client =>
+{
+    client.BaseAddress = new Uri("https://ia.polyrepo.andrescortes.dev/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+    var polyServiceKey = builder.Configuration["PolyService:ApiKey"]
+        ?? throw new InvalidOperationException("PolyService:ApiKey no configurada.");
+    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", polyServiceKey);
+});
+
+// Mongo Provisioning API — tercer motor de aprovisionamiento (junto a MySQL/SQLServer).
+// X-API-Key admin, backend-only. Mismo patrón de timeout corto que MySQL/SQLServer/DNS.
+builder.Services.AddHttpClient<IMongoProvisioningService, MongoProvisioningService>(client =>
+{
+    client.BaseAddress = new Uri("https://mongo.szapatar.dev/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+    var mongoAdminKey = builder.Configuration["Mongo:AdminApiKey"]
+        ?? throw new InvalidOperationException("Mongo:AdminApiKey no configurada.");
+    client.DefaultRequestHeaders.Add("X-API-Key", mongoAdminKey);
 });
 
 var app = builder.Build();

@@ -19,4 +19,7 @@ public sealed record CredencialDto
     public DateTime? UltimaActividad { get; init; }
     public required int EspacioMaximoMB { get; init; }
     public required decimal EspacioUtilizadoMB { get; init; }
+
+    /// <summary>Solo motor MongoDB — id en la Mongo Provisioning API, null para MySQL/SQLServer.</summary>
+    public string? MongoExternalId { get; init; }
 }

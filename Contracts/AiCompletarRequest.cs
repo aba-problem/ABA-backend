@@ -14,6 +14,10 @@ public sealed class AiCompletarRequest
     [StringLength(4000, MinimumLength = 1)]
     public string Prompt { get; init; } = default!;
 
+    /// <summary>Se clampea igual a [1,1024] dentro de PolyServiceAiClient sin importar lo que llegue aquí.</summary>
+    [Range(1, 1024)]
+    public int? MaxTokens { get; init; }
+
     [JsonExtensionData]
     public Dictionary<string, object>? PropiedadesDesconocidas { get; init; }
 }

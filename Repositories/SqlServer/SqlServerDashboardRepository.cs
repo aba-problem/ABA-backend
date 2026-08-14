@@ -125,6 +125,9 @@ public sealed class SqlServerDashboardRepository : IDashboardRepository
                     : reader.GetDateTime(reader.GetOrdinal("UltimaActividad")),
                 EspacioMaximoMB = reader.GetInt16(reader.GetOrdinal("EspacioMaximoMB")),
                 EspacioUtilizadoMB = reader.GetDecimal(reader.GetOrdinal("EspacioUtilizadoMB")),
+                MongoExternalId = reader.IsDBNull(reader.GetOrdinal("MongoExternalId"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("MongoExternalId")),
             };
         }
         catch (SqlException ex) when (ex.Number is 50011 or 50012)

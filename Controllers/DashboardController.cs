@@ -1,6 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using abaproblem.Contracts;
 using abaproblem.Repositories.Interfaces;
+using abaproblem.Services;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,12 +21,21 @@ namespace abaproblem.Controllers;
 public sealed class DashboardController : ControllerBase
 {
     private readonly IDashboardRepository _repo;
+    private readonly IProvisioningRepository _provisioningRepo;
+    private readonly IMongoProvisioningService _mongo;
     private readonly IAntiforgery _antiforgery;
     private readonly ILogger<DashboardController> _logger;
 
-    public DashboardController(IDashboardRepository repo, IAntiforgery antiforgery, ILogger<DashboardController> logger)
+    public DashboardController(
+        IDashboardRepository repo,
+        IProvisioningRepository provisioningRepo,
+        IMongoProvisioningService mongo,
+        IAntiforgery antiforgery,
+        ILogger<DashboardController> logger)
     {
         _repo = repo;
+        _provisioningRepo = provisioningRepo;
+        _mongo = mongo;
         _antiforgery = antiforgery;
         _logger = logger;
     }
@@ -80,6 +91,69 @@ public sealed class DashboardController : ControllerBase
 
         _logger.LogInformation("Credencial consultada usuarioId={UsuarioId} baseId={BaseId}", usuarioId, id);
         return Ok(credencial); // nunca se loguea la contraseña en sí (control 5.8)
+    }
+
+    /// <summary>
+    /// Rotación de credencial para motores donde la password la genera un proveedor
+    /// externo (hoy: MongoDB). Control 3.1/3.2: mismo chequeo BOLA y mismo rate limit
+    /// estricto que /credencial (5/hora por usuario) — sigue siendo re-exposición de
+    /// secreto. Control 1.2: endpoint mutante con cookies → exige CSRF token.
+    /// </summary>
+    [HttpPost("bases/{id:long}/rotar-credencial")]
+    [EnableRateLimiting("credenciales")]
+    public async Task<IActionResult> RotarCredencial(long id, CancellationToken ct)
+    {
+        await _antiforgery.ValidateRequestAsync(HttpContext);
+
+        if (!TryUsuarioId(out var usuarioId))
+            return Unauthorized();
+
+        // Reutiliza sp_ObtenerCredencialesBaseDatos (mismo chequeo BOLA de siempre) solo
+        // para confirmar dueño + motor + obtener el MongoExternalId — la password que trae
+        // NO se usa ni se reenvía, se descarta.
+        var actual = await _repo.ObtenerCredencialesAsync(id, usuarioId, ct);
+        if (actual is null)
+            return NotFound();
+
+        if (!string.Equals(actual.Motor, "MongoDB", StringComparison.OrdinalIgnoreCase) || actual.MongoExternalId is null)
+            return BadRequest(new { error = "La rotación de credencial solo está disponible para bases MongoDB." });
+
+        MongoCredencialRotadaResult credencialNueva;
+        try
+        {
+            credencialNueva = await _mongo.RotarCredencialAsync(actual.MongoExternalId, ct);
+        }
+        catch (ServicioExternoSaturadoException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                error = "El proveedor de MongoDB alcanzó su límite temporal. Intenta en unos minutos.",
+            });
+        }
+        catch (ProvisioningEngineException ex)
+        {
+            _logger.LogError(ex, "Fallo rotando credencial Mongo usuarioId={UsuarioId} baseId={BaseId}", usuarioId, id);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                error = "No se pudo rotar la credencial en este momento. Intenta de nuevo más tarde.",
+            });
+        }
+
+        var persistido = await _provisioningRepo.RotarCredencialExternaAsync(
+            id, usuarioId, credencialNueva.Username, credencialNueva.Password, ipOrigen: null, ct);
+        if (!persistido)
+        {
+            // La rotó el proveedor pero ABA_Control ya no la reconoce como del usuario (carrera
+            // rarísima: la base se desactivó entre el chequeo de arriba y este punto). No se
+            // pierde el secreto: sigue siendo válida en el proveedor, solo no queda accesible acá.
+            _logger.LogError("Credencial Mongo rotada en el proveedor pero no se pudo persistir usuarioId={UsuarioId} baseId={BaseId}", usuarioId, id);
+            return NotFound();
+        }
+
+        _logger.LogInformation("Credencial rotada usuarioId={UsuarioId} baseId={BaseId}", usuarioId, id);
+        // Se entrega UNA sola vez, igual que /credencial. El proveedor regenera también el
+        // usuario (no solo la password) — el frontend debe reemplazar ambos en su estado local.
+        return Ok(new { usuario = credencialNueva.Username, password = credencialNueva.Password });
     }
 
     /// <summary>

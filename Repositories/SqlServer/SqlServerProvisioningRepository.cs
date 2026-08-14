@@ -113,4 +113,63 @@ public sealed class SqlServerProvisioningRepository : IProvisioningRepository
         }
         return resultado;
     }
+
+    public async Task ConfirmarExternoAsync(
+        long baseDeDatosId, bool exitoso, string? usuarioBdReal, string? passwordPlano,
+        string? host, int? puerto, string? externalId, string? ipOrigen, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.AbrirAsync(ct);
+        await using var cmd = new SqlCommand("dbo.sp_ConfirmarAprovisionamientoExterno", conn)
+        {
+            CommandType = CommandType.StoredProcedure,
+        };
+        cmd.Parameters.Add("@BaseDeDatosId", SqlDbType.Int).Value = (int)baseDeDatosId;
+        cmd.Parameters.Add("@Exitoso", SqlDbType.Bit).Value = exitoso;
+        cmd.Parameters.Add("@UsuarioBdReal", SqlDbType.VarChar, 100).Value = (object?)usuarioBdReal ?? DBNull.Value;
+        cmd.Parameters.Add("@PasswordPlano", SqlDbType.VarChar, 200).Value = (object?)passwordPlano ?? DBNull.Value;
+        cmd.Parameters.Add("@Host", SqlDbType.VarChar, 255).Value = (object?)host ?? DBNull.Value;
+        cmd.Parameters.Add("@Puerto", SqlDbType.Int).Value = (object?)puerto ?? DBNull.Value;
+        cmd.Parameters.Add("@ExternalId", SqlDbType.VarChar, 100).Value = (object?)externalId ?? DBNull.Value;
+        cmd.Parameters.Add("@IpOrigen", SqlDbType.VarChar, 45).Value = (object?)ipOrigen ?? DBNull.Value;
+
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqlException ex) when (ex.Number >= 50000)
+        {
+            throw new SpBusinessException(ex.Number, ex.Message);
+        }
+    }
+
+    public async Task<bool> RotarCredencialExternaAsync(
+        long baseDeDatosId, long usuarioIdSolicitante, string usuarioBdNuevo, string passwordPlanoNuevo,
+        string? ipOrigen, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.AbrirAsync(ct);
+        await using var cmd = new SqlCommand("dbo.sp_RotarCredencialExterna", conn)
+        {
+            CommandType = CommandType.StoredProcedure,
+        };
+        cmd.Parameters.Add("@BaseDeDatosId", SqlDbType.Int).Value = (int)baseDeDatosId;
+        cmd.Parameters.Add("@UsuarioIdSolicitante", SqlDbType.Int).Value = (int)usuarioIdSolicitante;
+        cmd.Parameters.Add("@UsuarioBdNuevo", SqlDbType.VarChar, 100).Value = usuarioBdNuevo;
+        cmd.Parameters.Add("@PasswordPlanoNuevo", SqlDbType.VarChar, 200).Value = passwordPlanoNuevo;
+        cmd.Parameters.Add("@IpOrigen", SqlDbType.VarChar, 45).Value = (object?)ipOrigen ?? DBNull.Value;
+
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+            return true;
+        }
+        catch (SqlException ex) when (ex.Number is 50011 or 50012)
+        {
+            // Control 3.1 (BOLA): no existe o no pertenece a este usuario → 404, nunca 403.
+            return false;
+        }
+        catch (SqlException ex) when (ex.Number >= 50000)
+        {
+            throw new SpBusinessException(ex.Number, ex.Message);
+        }
+    }
 }

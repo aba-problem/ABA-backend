@@ -12,9 +12,9 @@ namespace abaproblem.Controllers;
 /// (header X-API-Key), NUNCA por las cookies del usuario — es para consumo externo
 /// (scripts, CI, otros backends), no para el navegador del usuario.
 ///
-/// Alcance de este entregable: andamiaje completo de auth/rate-limit/auditoría de
-/// consumo. La integración con un proveedor de IA real queda documentada como pendiente,
-/// no bloqueante — swap trivial dentro de este mismo método cuando se decida el proveedor.
+/// Integración real con PolyService IA (https://ia.polyrepo.andrescortes.dev). La API
+/// key del proveedor es un secreto de infraestructura del backend (POLYSERVICE_AI_KEY),
+/// nunca se expone al usuario final.
 /// </summary>
 [ApiController]
 [Route("ai")]
@@ -22,11 +22,13 @@ namespace abaproblem.Controllers;
 public sealed class AiController : ControllerBase
 {
     private readonly IApiKeyRepository _repo;
+    private readonly IPolyServiceAiClient _polyService;
     private readonly ILogger<AiController> _logger;
 
-    public AiController(IApiKeyRepository repo, ILogger<AiController> logger)
+    public AiController(IApiKeyRepository repo, IPolyServiceAiClient polyService, ILogger<AiController> logger)
     {
         _repo = repo;
+        _polyService = polyService;
         _logger = logger;
     }
 
@@ -39,17 +41,36 @@ public sealed class AiController : ControllerBase
 
         var apiKeyId = int.Parse(User.FindFirst("apiKeyId")!.Value);
 
-        // Auditoría de consumo sin lógica adicional en C# — sp_RegistrarUsoApiKey hace el insert
-        // y actualiza UltimoUso. TokensEstimados en null: no hay proveedor real todavía que lo mida.
-        await _repo.RegistrarUsoAsync(apiKeyId, "/ai/completar", tokensEstimados: null, ct);
-
-        _logger.LogInformation("Llamada a /ai/completar apiKeyId={ApiKeyId}", apiKeyId);
-
-        return Ok(new
+        try
         {
-            mensaje = "Andamiaje de IA como Servicio verificado: autenticación por API key, " +
-                      "rate limit particionado y auditoría de consumo operativos. Integración " +
-                      "con un proveedor de IA real pendiente de definir (fuera del alcance actual).",
-        });
+            var resultado = await _polyService.CompletarAsync(request.Prompt, request.MaxTokens ?? 256, ct);
+
+            // Auditoría de consumo con el uso REAL que devolvió el proveedor (no una estimación).
+            await _repo.RegistrarUsoAsync(apiKeyId, "/ai/completar",
+                tokensEstimados: resultado.TokensPrompt + resultado.TokensCompletion, ct);
+
+            _logger.LogInformation("Llamada a /ai/completar OK apiKeyId={ApiKeyId} tokens={Tokens}",
+                apiKeyId, resultado.TokensPrompt + resultado.TokensCompletion);
+
+            return Ok(new { respuesta = resultado.Contenido });
+        }
+        catch (ServicioExternoSaturadoException)
+        {
+            _logger.LogWarning("PolyService saturado, /ai/completar rechazado apiKeyId={ApiKeyId}", apiKeyId);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                error = "IA_NO_DISPONIBLE",
+                mensaje = "El servicio de IA alcanzó su límite temporal. Intenta en unos minutos.",
+            });
+        }
+        catch (ProvisioningEngineException ex)
+        {
+            _logger.LogError(ex, "Fallo llamando a PolyService apiKeyId={ApiKeyId}", apiKeyId);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                error = "IA_NO_DISPONIBLE",
+                mensaje = "El servicio de IA no está disponible en este momento. Intenta de nuevo más tarde.",
+            });
+        }
     }
 }

@@ -114,21 +114,23 @@ public static class RateLimitPolicies
                 });
             });
 
-            // Entregable 3, Módulo IA — "ai-service" particionado por ApiKeyId (NO por IP):
-            // el consumo real es por key, no por origen de red (puede venir de un servidor
-            // de terceros compartiendo IP con muchos otros clientes).
+            // Entregable 3, Módulo IA — "ai-service": PolyService IA usa UNA sola API key
+            // compartida por TODO ABA (no una por usuario), con un límite del proveedor de
+            // 10 req/min + 100/día EN TOTAL. Por eso esta partición usa una clave CONSTANTE
+            // (no por ApiKeyId/IP) — el techo tiene que ser sobre el consumo agregado de
+            // todos los usuarios, no por usuario, o cada usuario podría agotar el presupuesto
+            // compartido por su cuenta. 8/min queda deliberadamente por debajo del límite real
+            // del proveedor (10/min) para dejar margen antes de que PolyService devuelva 429.
+            // El eje de 100/día se refuerza además con un contador soft en PolyServiceAiClient.
             options.AddPolicy("ai-service", context =>
-            {
-                var apiKeyId = context.User.FindFirst("apiKeyId")?.Value ?? "anon";
-                return RateLimitPartition.GetTokenBucketLimiter(apiKeyId, _ => new TokenBucketRateLimiterOptions
+                RateLimitPartition.GetTokenBucketLimiter("polyservice-global", key => new TokenBucketRateLimiterOptions
                 {
-                    TokenLimit = 20,
-                    TokensPerPeriod = 20,
+                    TokenLimit = 8,
+                    TokensPerPeriod = 8,
                     ReplenishmentPeriod = TimeSpan.FromMinutes(1),
                     QueueLimit = 0,
                     AutoReplenishment = true,
-                });
-            });
+                }));
 
             // Entregable 3, Módulo DNS — "dns-crear" por usuario: Token Bucket, cada
             // registro toca un proveedor externo real (Cloudflare) — ráfagas controladas.
