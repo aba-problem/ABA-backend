@@ -88,6 +88,7 @@ MapEnv("Dns:CloudflareZoneId", "CLOUDFLARE_ZONE_ID");
 MapEnv("Dns:DominioBase", "DNS_DOMINIO_BASE");
 MapEnv("PolyService:ApiKey", "POLYSERVICE_AI_KEY");
 MapEnv("Mongo:AdminApiKey", "MONGO_ADMIN_API_KEY");
+MapEnv("Snapshot:N8nApiKey", "SNAPSHOT_N8N_KEY");
 builder.Configuration.AddInMemoryCollection(mapaEnv);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -346,6 +347,17 @@ builder.Services.AddHttpClient<IMongoProvisioningService, MongoProvisioningServi
     var mongoAdminKey = builder.Configuration["Mongo:AdminApiKey"];
     if (!string.IsNullOrWhiteSpace(mongoAdminKey))
         client.DefaultRequestHeaders.Add("X-API-Key", mongoAdminKey);
+});
+
+// Entregable 3, Módulo N8N — Snapshot (proveedor externo real de N8N). Mismo motivo que
+// arriba: nunca lanzar en este delegate. SnapshotN8nClient valida la config internamente.
+builder.Services.AddHttpClient<ISnapshotN8nClient, SnapshotN8nClient>(client =>
+{
+    client.BaseAddress = new Uri("https://api.snapshot.andrescortes.dev/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+    var snapshotKey = builder.Configuration["Snapshot:N8nApiKey"];
+    if (!string.IsNullOrWhiteSpace(snapshotKey))
+        client.DefaultRequestHeaders.Add("x-api-key", snapshotKey);
 });
 
 var app = builder.Build();
