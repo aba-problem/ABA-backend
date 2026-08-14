@@ -37,7 +37,7 @@ public static class RateLimitPolicies
                 });
             });
 
-            // Control 2.2 — política "provisioning" por usuario: Token Bucket, 1 base cada 10 min.
+            // Control 2.2 — política "provisioning" por usuario: Token Bucket, 1 base cada 2 min.
             options.AddPolicy("provisioning", context =>
             {
                 var userId = IdentificarPartición(context);
@@ -45,7 +45,7 @@ public static class RateLimitPolicies
                 {
                     TokenLimit = 1,                          // ráfaga inicial de 1
                     TokensPerPeriod = 1,
-                    ReplenishmentPeriod = TimeSpan.FromMinutes(10), // recarga lenta
+                    ReplenishmentPeriod = TimeSpan.FromMinutes(2),
                     QueueLimit = 0,
                     AutoReplenishment = true,
                 });

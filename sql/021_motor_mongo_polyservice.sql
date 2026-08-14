@@ -31,10 +31,21 @@ GO
    sobreescribe Host/Puerto con los valores reales que devuelve el proveedor
    por si en el futuro el proveedor asigna hosts distintos por base.
    ------------------------------------------------------------------------- */
+-- 'mongo.szapatar.dev' es la URL de la API de aprovisionamiento (BaseAddress del
+-- HttpClient en Program.cs) — el host de CONEXIÓN real a la base es un subdominio
+-- distinto, documentado en Aba/external_services/mongo_contract.md: "Host de
+-- conexión a MongoDB: connection.szapatar.dev". HostDefault existía con el valor
+-- de la API por error; se corrige acá para quien ya corrió esta migración.
 IF NOT EXISTS (SELECT 1 FROM dbo.MotorBaseDatos WHERE Nombre = 'MongoDB')
 BEGIN
     INSERT INTO dbo.MotorBaseDatos (Nombre, HostDefault, PuertoDefault, Activo)
-    VALUES ('MongoDB', 'mongo.szapatar.dev', 27017, 1);
+    VALUES ('MongoDB', 'connection.szapatar.dev', 27017, 1);
+END
+ELSE
+BEGIN
+    UPDATE dbo.MotorBaseDatos
+    SET HostDefault = 'connection.szapatar.dev'
+    WHERE Nombre = 'MongoDB' AND HostDefault = 'mongo.szapatar.dev';
 END
 GO
 
@@ -62,6 +73,7 @@ GO
 CREATE OR ALTER PROCEDURE dbo.sp_ConfirmarAprovisionamientoExterno
     @BaseDeDatosId INT,
     @Exitoso       BIT,
+    @NombreBdReal  VARCHAR(63)  = NULL,
     @UsuarioBdReal VARCHAR(100) = NULL,
     @PasswordPlano VARCHAR(200) = NULL,
     @Host          VARCHAR(255) = NULL,
@@ -82,8 +94,13 @@ BEGIN
     IF @UsuarioId IS NULL
         THROW 50007, 'La base de datos no existe o ya fue confirmada.', 1;
 
-    IF @Exitoso = 1 AND (@UsuarioBdReal IS NULL OR @PasswordPlano IS NULL OR @ExternalId IS NULL)
-        THROW 50013, 'Confirmación externa exitosa requiere usuario, password y externalId reales.', 1;
+    -- El proveedor genera su PROPIO nombre físico de base (aleatorio, independiente del
+    -- que reservamos acá — ver Aba/external_services/mongo_contract.md: "Genera un nombre
+    -- físico de base de datos aleatorio, independiente del username"). Sin @NombreBdReal el
+    -- usuario se queda con el nombre de RESERVA de ABA_Control, que nunca existió de verdad
+    -- en el motor — autenticación/conexión fallan siempre aunque la contraseña sea correcta.
+    IF @Exitoso = 1 AND (@NombreBdReal IS NULL OR @UsuarioBdReal IS NULL OR @PasswordPlano IS NULL OR @ExternalId IS NULL)
+        THROW 50013, 'Confirmación externa exitosa requiere nombre de base, usuario, password y externalId reales.', 1;
 
     DECLARE @PasswordCifrado VARBINARY(256);
 
@@ -101,6 +118,7 @@ BEGIN
         BEGIN
             UPDATE dbo.BaseDeDatos
             SET Estado           = 'ACTIVA',
+                NombreBD         = @NombreBdReal,
                 UsuarioBD        = @UsuarioBdReal,
                 PasswordCifrado  = @PasswordCifrado,
                 Host             = COALESCE(@Host, Host),

@@ -162,6 +162,13 @@ public sealed class DashboardController : ControllerBase
     /// Control BOLA: sp_DesactivarBaseDatos valida que la base pertenezca al usuario.
     /// El DELETE real es interceptado por trg_BaseDeDatos_SoftDelete que convierte
     /// a UPDATE + registro en Auditoria (Accion='DESACTIVAR').
+    ///
+    /// Para MySQL/SQLServer el soft-delete alcanza (infraestructura propia). Para MongoDB
+    /// la base real vive en un proveedor externo — si no la borramos ahí también, queda
+    /// huérfana ocupando su cupo para siempre aunque en ABA_Control diga ELIMINADA. Se
+    /// intenta primero contra el proveedor; si falla, se loguea pero NO bloquea el
+    /// soft-delete (mismo criterio que RotarCredencial: el usuario no debe quedar preso
+    /// de un proveedor externo con problemas — la limpieza real queda pendiente/manual).
     /// </summary>
     [HttpDelete("bases/{id:long}")]
     public async Task<IActionResult> Desactivar(long id, CancellationToken ct)
@@ -170,6 +177,18 @@ public sealed class DashboardController : ControllerBase
 
         if (!TryUsuarioId(out var usuarioId))
             return Unauthorized();
+
+        // Reutiliza sp_ObtenerCredencialesBaseDatos (mismo chequeo BOLA de siempre) solo
+        // para confirmar motor + MongoExternalId — la password que trae NO se usa, se descarta.
+        var actual = await _repo.ObtenerCredencialesAsync(id, usuarioId, ct);
+        if (actual is not null && string.Equals(actual.Motor, "MongoDB", StringComparison.OrdinalIgnoreCase) && actual.MongoExternalId is not null)
+        {
+            var borrada = await _mongo.EliminarBaseDeDatosAsync(actual.MongoExternalId, ct);
+            if (!borrada)
+                _logger.LogError(
+                    "No se pudo eliminar la base MongoDB en el proveedor externo usuarioId={UsuarioId} baseId={BaseId} externalId={ExternalId} — queda huérfana, requiere limpieza manual",
+                    usuarioId, id, actual.MongoExternalId);
+        }
 
         var resultado = await _repo.DesactivarAsync(id, usuarioId, ct);
         if (resultado is null)
