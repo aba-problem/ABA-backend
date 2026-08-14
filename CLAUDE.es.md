@@ -1,4 +1,4 @@
-# CLAUDE.md (Español)
+1# CLAUDE.md (Español)
 
 Este archivo le da contexto a Claude Code (claude.ai/code) para trabajar con el código de este repositorio.
 

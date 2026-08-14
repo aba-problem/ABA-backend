@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace abaproblem.Services;
 
 /// <summary>
-/// Implementación real contra la API v4 de Cloudflare (DNS de andrescortes.dev ya
+/// Implementación real contra la API v4 de Cloudflare (DNS de coderhivex.com ya
 /// gestionado ahí). El token de autorización se configura como header por defecto del
 /// HttpClient tipado en Program.cs — nunca se concatena manualmente ni se loguea aquí.
 ///
@@ -27,7 +27,7 @@ public sealed class CloudflareDnsProviderService : IDnsProviderService
         _http = http;
         _zoneId = config["Dns:CloudflareZoneId"]
             ?? throw new InvalidOperationException("Dns:CloudflareZoneId no configurada.");
-        _dominioBase = config["Dns:DominioBase"] ?? "andrescortes.dev";
+        _dominioBase = config["Dns:DominioBase"] ?? "aba.coderhivex.com";
         _logger = logger;
     }
 
