@@ -25,18 +25,27 @@ public sealed class PolyServiceAiClient : IPolyServiceAiClient
 
     private readonly HttpClient _http;
     private readonly IMemoryCache _cache;
+    private readonly bool _configurado;
     private readonly ILogger<PolyServiceAiClient> _logger;
     private readonly object _contadorLock = new();
 
-    public PolyServiceAiClient(HttpClient http, IMemoryCache cache, ILogger<PolyServiceAiClient> logger)
+    public PolyServiceAiClient(HttpClient http, IMemoryCache cache, IConfiguration config, ILogger<PolyServiceAiClient> logger)
     {
         _http = http;
         _cache = cache;
+        // Chequeo diferido a punto de uso, NUNCA en el constructor (ver comentario en
+        // Program.cs) — construir este servicio nunca debe poder tumbar a quien lo pide.
+        _configurado = !string.IsNullOrWhiteSpace(config["PolyService:ApiKey"]);
         _logger = logger;
     }
 
     public async Task<PolyServiceChatResult> CompletarAsync(string prompt, int maxTokens, CancellationToken ct = default)
     {
+        if (!_configurado)
+            throw new ProvisioningEngineException(
+                "El servicio de IA no está disponible en este momento.",
+                new InvalidOperationException("PolyService:ApiKey no configurada."));
+
         var maxTokensClamped = Math.Clamp(maxTokens, 1, 1024);
 
         if (!ReservarCupoDiario())

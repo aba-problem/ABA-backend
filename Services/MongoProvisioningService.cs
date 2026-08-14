@@ -19,16 +19,25 @@ namespace abaproblem.Services;
 public sealed class MongoProvisioningService : IMongoProvisioningService
 {
     private readonly HttpClient _http;
+    private readonly bool _configurado;
     private readonly ILogger<MongoProvisioningService> _logger;
 
-    public MongoProvisioningService(HttpClient http, ILogger<MongoProvisioningService> logger)
+    public MongoProvisioningService(HttpClient http, IConfiguration config, ILogger<MongoProvisioningService> logger)
     {
         _http = http;
+        // Chequeo diferido a punto de uso, NUNCA en el constructor (ver comentario en
+        // Program.cs) — construir este servicio nunca debe poder tumbar a quien lo pide.
+        _configurado = !string.IsNullOrWhiteSpace(config["Mongo:AdminApiKey"]);
         _logger = logger;
     }
 
     public async Task<MongoProvisioningResult> CrearBaseDeDatosAsync(string usuarioBd, CancellationToken ct = default)
     {
+        if (!_configurado)
+            throw new ProvisioningEngineException(
+                "No se pudo aprovisionar la base MongoDB en el motor destino.",
+                new InvalidOperationException("Mongo:AdminApiKey no configurada."));
+
         HttpResponseMessage respuesta;
         try
         {
@@ -78,6 +87,12 @@ public sealed class MongoProvisioningService : IMongoProvisioningService
 
     public async Task<bool> EliminarBaseDeDatosAsync(string mongoExternalId, CancellationToken ct = default)
     {
+        if (!_configurado)
+        {
+            _logger.LogError("Mongo:AdminApiKey no configurada, no se puede eliminar {ExternalId}", mongoExternalId);
+            return false;
+        }
+
         try
         {
             using var respuesta = await _http.DeleteAsync($"databases/{mongoExternalId}", ct);
@@ -98,6 +113,11 @@ public sealed class MongoProvisioningService : IMongoProvisioningService
 
     public async Task<MongoCredencialRotadaResult> RotarCredencialAsync(string mongoExternalId, CancellationToken ct = default)
     {
+        if (!_configurado)
+            throw new ProvisioningEngineException(
+                "No se pudo rotar la credencial en el motor destino.",
+                new InvalidOperationException("Mongo:AdminApiKey no configurada."));
+
         HttpResponseMessage respuesta;
         try
         {

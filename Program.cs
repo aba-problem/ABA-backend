@@ -318,27 +318,34 @@ builder.Services.AddHttpClient<IDnsProviderService, CloudflareDnsProviderService
 // PolyService IA — proveedor externo de completions. Timeout deliberadamente MÁS largo
 // que GeoIp/Captcha/Cloudflare (5s): una respuesta de completions tarda más que una
 // consulta de geolocalización o un lookup DNS. La API key es un secreto de
-// infraestructura del backend (una sola key para TODO ABA, nunca por usuario) — si no
-// está configurada, fallamos rápido en vez de dejar que cada request llegue a
-// PolyService sin Authorization y reciba 401.
+// infraestructura del backend (una sola key para TODO ABA, nunca por usuario).
+//
+// NUNCA lanzar acá si falta la config: este delegate corre cada vez que DI resuelve
+// IPolyServiceAiClient — un throw aquí tumba la CONSTRUCCIÓN del controller completo,
+// no solo la llamada que necesitaba la key (esto rompió /dashboard/* y /provisioning/crear
+// en producción cuando Mongo:AdminApiKey faltaba, aunque ninguno de los dos toca Mongo
+// en el camino feliz). Si falta, el header simplemente no se agrega — PolyServiceAiClient
+// chequea la config él mismo antes de cada llamada y falla ahí, de forma acotada.
 builder.Services.AddHttpClient<IPolyServiceAiClient, PolyServiceAiClient>(client =>
 {
     client.BaseAddress = new Uri("https://ia.polyrepo.andrescortes.dev/");
     client.Timeout = TimeSpan.FromSeconds(30);
-    var polyServiceKey = builder.Configuration["PolyService:ApiKey"]
-        ?? throw new InvalidOperationException("PolyService:ApiKey no configurada.");
-    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", polyServiceKey);
+    var polyServiceKey = builder.Configuration["PolyService:ApiKey"];
+    if (!string.IsNullOrWhiteSpace(polyServiceKey))
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", polyServiceKey);
 });
 
 // Mongo Provisioning API — tercer motor de aprovisionamiento (junto a MySQL/SQLServer).
-// X-API-Key admin, backend-only. Mismo patrón de timeout corto que MySQL/SQLServer/DNS.
+// X-API-Key admin, backend-only. Mismo motivo que arriba: nunca lanzar en este delegate
+// (mismo incidente real: tumbaba TODO DashboardController y ProvisioningOrchestrator,
+// no solo el motor MongoDB). MongoProvisioningService valida la config internamente.
 builder.Services.AddHttpClient<IMongoProvisioningService, MongoProvisioningService>(client =>
 {
     client.BaseAddress = new Uri("https://mongo.szapatar.dev/");
     client.Timeout = TimeSpan.FromSeconds(10);
-    var mongoAdminKey = builder.Configuration["Mongo:AdminApiKey"]
-        ?? throw new InvalidOperationException("Mongo:AdminApiKey no configurada.");
-    client.DefaultRequestHeaders.Add("X-API-Key", mongoAdminKey);
+    var mongoAdminKey = builder.Configuration["Mongo:AdminApiKey"];
+    if (!string.IsNullOrWhiteSpace(mongoAdminKey))
+        client.DefaultRequestHeaders.Add("X-API-Key", mongoAdminKey);
 });
 
 var app = builder.Build();
