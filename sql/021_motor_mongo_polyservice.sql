@@ -31,10 +31,21 @@ GO
    sobreescribe Host/Puerto con los valores reales que devuelve el proveedor
    por si en el futuro el proveedor asigna hosts distintos por base.
    ------------------------------------------------------------------------- */
+-- 'mongo.szapatar.dev' es la URL de la API de aprovisionamiento (BaseAddress del
+-- HttpClient en Program.cs) — el host de CONEXIÓN real a la base es un subdominio
+-- distinto, documentado en Aba/external_services/mongo_contract.md: "Host de
+-- conexión a MongoDB: connection.szapatar.dev". HostDefault existía con el valor
+-- de la API por error; se corrige acá para quien ya corrió esta migración.
 IF NOT EXISTS (SELECT 1 FROM dbo.MotorBaseDatos WHERE Nombre = 'MongoDB')
 BEGIN
     INSERT INTO dbo.MotorBaseDatos (Nombre, HostDefault, PuertoDefault, Activo)
-    VALUES ('MongoDB', 'mongo.szapatar.dev', 27017, 1);
+    VALUES ('MongoDB', 'connection.szapatar.dev', 27017, 1);
+END
+ELSE
+BEGIN
+    UPDATE dbo.MotorBaseDatos
+    SET HostDefault = 'connection.szapatar.dev'
+    WHERE Nombre = 'MongoDB' AND HostDefault = 'mongo.szapatar.dev';
 END
 GO
 

@@ -165,7 +165,12 @@ public sealed class MongoProvisioningService : IMongoProvisioningService
     /// </summary>
     private (string Host, int Puerto) ExtraerHostYPuerto(string? connectionString)
     {
-        const string hostPorDefecto = "mongo.szapatar.dev";
+        // "mongo.szapatar.dev" es la URL de la API (BaseAddress del HttpClient) — el host
+        // de CONEXIÓN a la base es un subdominio distinto, documentado en
+        // Aba/external_services/mongo_contract.md: "Host de conexión a MongoDB:
+        // connection.szapatar.dev". Usar el de la API acá sería un fallback que nunca
+        // conecta a nada.
+        const string hostPorDefecto = "connection.szapatar.dev";
         const int puertoPorDefecto = 27017;
 
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -176,7 +181,22 @@ public sealed class MongoProvisioningService : IMongoProvisioningService
             var uri = new Uri(connectionString);
             var host = uri.Host;
             var puerto = uri.Port > 0 ? uri.Port : puertoPorDefecto;
-            return (string.IsNullOrEmpty(host) ? hostPorDefecto : host, puerto);
+
+            // Bug confirmado en vivo el 2026-08-14 (equipo szapatar, mongo.szapatar.dev):
+            // el connectionString que devuelve el proveedor trae "localhost" en vez del host
+            // público documentado — probablemente MONGO_PUBLIC_HOST sin configurar en su
+            // despliegue. "localhost" solo tiene sentido dentro de SU propia red, nunca para
+            // un cliente nuestro. Mientras no lo corrijan, se ignora ese valor puntual y se usa
+            // el host documentado por contrato (fijo, no varía por base) — si algún día lo
+            // arreglan de su lado, esta condición deja de dispararse sola, sin tocar código de nuevo.
+            if (string.IsNullOrEmpty(host) || host is "localhost" or "127.0.0.1")
+            {
+                if (!string.IsNullOrEmpty(host))
+                    _logger.LogWarning("Mongo Provisioning API devolvió host '{Host}' en el connectionString (bug conocido) — usando {HostPorDefecto}", host, hostPorDefecto);
+                return (hostPorDefecto, puerto);
+            }
+
+            return (host, puerto);
         }
         catch (UriFormatException)
         {
