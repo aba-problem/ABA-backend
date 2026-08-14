@@ -39,7 +39,7 @@ public interface IProvisioningRepository
     /// del SP) y pasa a 'ACTIVA'; @exitoso=false se comporta igual que ConfirmarAsync.
     /// </summary>
     Task ConfirmarExternoAsync(
-        long baseDeDatosId, bool exitoso, string? usuarioBdReal, string? passwordPlano,
+        long baseDeDatosId, bool exitoso, string? nombreBdReal, string? usuarioBdReal, string? passwordPlano,
         string? host, int? puerto, string? externalId, string? ipOrigen, CancellationToken ct = default);
 
     /// <summary>

@@ -87,7 +87,7 @@ public sealed class ProvisioningOrchestrator : IProvisioningOrchestrator
         {
             await _repo.ConfirmarExternoAsync(
                 reserva.BaseDeDatosId, exitoso: true,
-                resultado.Username, resultado.Password, resultado.Host, resultado.Puerto, resultado.ExternalId,
+                resultado.Database, resultado.Username, resultado.Password, resultado.Host, resultado.Puerto, resultado.ExternalId,
                 ipOrigen, ct);
         }
         catch (Exception ex)
@@ -104,6 +104,7 @@ public sealed class ProvisioningOrchestrator : IProvisioningOrchestrator
 
         return reserva with
         {
+            NombreBD = resultado.Database,
             UsuarioBD = resultado.Username,
             Host = resultado.Host,
             Puerto = resultado.Puerto,

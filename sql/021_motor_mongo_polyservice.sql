@@ -73,6 +73,7 @@ GO
 CREATE OR ALTER PROCEDURE dbo.sp_ConfirmarAprovisionamientoExterno
     @BaseDeDatosId INT,
     @Exitoso       BIT,
+    @NombreBdReal  VARCHAR(63)  = NULL,
     @UsuarioBdReal VARCHAR(100) = NULL,
     @PasswordPlano VARCHAR(200) = NULL,
     @Host          VARCHAR(255) = NULL,
@@ -93,8 +94,13 @@ BEGIN
     IF @UsuarioId IS NULL
         THROW 50007, 'La base de datos no existe o ya fue confirmada.', 1;
 
-    IF @Exitoso = 1 AND (@UsuarioBdReal IS NULL OR @PasswordPlano IS NULL OR @ExternalId IS NULL)
-        THROW 50013, 'Confirmación externa exitosa requiere usuario, password y externalId reales.', 1;
+    -- El proveedor genera su PROPIO nombre físico de base (aleatorio, independiente del
+    -- que reservamos acá — ver Aba/external_services/mongo_contract.md: "Genera un nombre
+    -- físico de base de datos aleatorio, independiente del username"). Sin @NombreBdReal el
+    -- usuario se queda con el nombre de RESERVA de ABA_Control, que nunca existió de verdad
+    -- en el motor — autenticación/conexión fallan siempre aunque la contraseña sea correcta.
+    IF @Exitoso = 1 AND (@NombreBdReal IS NULL OR @UsuarioBdReal IS NULL OR @PasswordPlano IS NULL OR @ExternalId IS NULL)
+        THROW 50013, 'Confirmación externa exitosa requiere nombre de base, usuario, password y externalId reales.', 1;
 
     DECLARE @PasswordCifrado VARBINARY(256);
 
@@ -112,6 +118,7 @@ BEGIN
         BEGIN
             UPDATE dbo.BaseDeDatos
             SET Estado           = 'ACTIVA',
+                NombreBD         = @NombreBdReal,
                 UsuarioBD        = @UsuarioBdReal,
                 PasswordCifrado  = @PasswordCifrado,
                 Host             = COALESCE(@Host, Host),

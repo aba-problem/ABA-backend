@@ -115,7 +115,7 @@ public sealed class SqlServerProvisioningRepository : IProvisioningRepository
     }
 
     public async Task ConfirmarExternoAsync(
-        long baseDeDatosId, bool exitoso, string? usuarioBdReal, string? passwordPlano,
+        long baseDeDatosId, bool exitoso, string? nombreBdReal, string? usuarioBdReal, string? passwordPlano,
         string? host, int? puerto, string? externalId, string? ipOrigen, CancellationToken ct = default)
     {
         await using var conn = await _factory.AbrirAsync(ct);
@@ -125,6 +125,7 @@ public sealed class SqlServerProvisioningRepository : IProvisioningRepository
         };
         cmd.Parameters.Add("@BaseDeDatosId", SqlDbType.Int).Value = (int)baseDeDatosId;
         cmd.Parameters.Add("@Exitoso", SqlDbType.Bit).Value = exitoso;
+        cmd.Parameters.Add("@NombreBdReal", SqlDbType.VarChar, 63).Value = (object?)nombreBdReal ?? DBNull.Value;
         cmd.Parameters.Add("@UsuarioBdReal", SqlDbType.VarChar, 100).Value = (object?)usuarioBdReal ?? DBNull.Value;
         cmd.Parameters.Add("@PasswordPlano", SqlDbType.VarChar, 200).Value = (object?)passwordPlano ?? DBNull.Value;
         cmd.Parameters.Add("@Host", SqlDbType.VarChar, 255).Value = (object?)host ?? DBNull.Value;
