@@ -20,9 +20,15 @@ namespace abaproblem.Contracts;
 /// </summary>
 public sealed class ProvisioningRequest
 {
-    /// <summary>Motor destino. Validado contra el catálogo real dbo.MotorBaseDatos por el propio SP.</summary>
+    /// <summary>
+    /// Motor destino. Solo se valida FORMATO acá (alfanumérico, longitud razonable) — la
+    /// lista real de motores soportados vive en dbo.MotorBaseDatos y la valida
+    /// sp_AprovisionarBaseDatos (THROW 50003 si no existe/está inactivo). Un regex con los
+    /// nombres de motor hardcodeados acá rompería cada vez que se agrega uno nuevo sin
+    /// acordarse de tocar este archivo — pasó exactamente eso con MongoDB.
+    /// </summary>
     [Required]
-    [RegularExpression("^(MySQL|SQLServer)$", ErrorMessage = "Motor no soportado")]
+    [RegularExpression("^[A-Za-z0-9]{2,30}$", ErrorMessage = "Motor no soportado")]
     public string NombreMotor { get; init; } = default!;
 
     [JsonExtensionData]
